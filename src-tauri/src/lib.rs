@@ -27,14 +27,9 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
-            let data_dir = app
-                .path()
-                .app_data_dir()
-                .expect("无法获取 app data 目录");
+            let data_dir = app.path().app_data_dir().expect("无法获取 app data 目录");
 
-            let db = Arc::new(
-                Database::open(&data_dir).expect("无法初始化数据库")
-            );
+            let db = Arc::new(Database::open(&data_dir).expect("无法初始化数据库"));
 
             let settings_repo = SettingsRepository::new(&data_dir);
             let settings = settings_repo.load().unwrap_or_default();
@@ -71,6 +66,7 @@ pub fn run() {
             commands::device::get_device_detail,
             commands::device::enable_wireless_device,
             commands::device::connect_wireless_device,
+            commands::device::discover_wireless_devices,
             commands::device::pair_wireless_device,
             commands::device::disconnect_wireless_device,
             commands::mirror::start_mirror,

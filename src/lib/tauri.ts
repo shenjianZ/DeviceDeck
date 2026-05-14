@@ -7,6 +7,7 @@ import type {
   MirrorSession,
   AppSettings,
   AppLog,
+  WirelessAdbService,
 } from "../types";
 
 export const tauriApi = {
@@ -21,6 +22,8 @@ export const tauriApi = {
     invoke<DeviceInfo>("enable_wireless_device", { serial, port }),
   connectWirelessDevice: (host: string, port = 5555) =>
     invoke<DeviceInfo>("connect_wireless_device", { host, port }),
+  discoverWirelessDevices: () =>
+    invoke<WirelessAdbService[]>("discover_wireless_devices"),
   pairWirelessDevice: (host: string, port: number, pairingCode: string) =>
     invoke<string>("pair_wireless_device", { host, port, pairingCode }),
   disconnectWirelessDevice: (serial: string) =>

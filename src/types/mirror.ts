@@ -2,6 +2,7 @@ export interface MirrorConfig {
   maxSize: string;
   videoBitRate: string;
   maxFps: string;
+  videoCodec: string;
   noControl: boolean;
   stayAwake: boolean;
   turnScreenOff: boolean;

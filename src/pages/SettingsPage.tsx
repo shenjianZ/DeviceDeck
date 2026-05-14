@@ -1,11 +1,11 @@
 import { Save, RotateCcw, Terminal, Monitor } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSettingsStore } from "../stores/settingsStore";
 import { useDeviceStore } from "../stores/deviceStore";
 import { Toggle } from "../components/ui/Toggle";
 import { Dropdown } from "../components/ui/Dropdown";
 import { Badge } from "../components/ui/Badge";
-import { OPT_RES, OPT_BR, OPT_FPS } from "../lib/presets";
+import { OPT_RES, OPT_BR, OPT_CODEC, OPT_FPS } from "../lib/presets";
 import type { AppSettings, MirrorConfig } from "../types";
 
 export function SettingsPage() {
@@ -17,6 +17,10 @@ export function SettingsPage() {
 
   const [local, setLocal] = useState<AppSettings>({ ...storeSettings });
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setLocal({ ...storeSettings });
+  }, [storeSettings]);
 
   const updateLocal = (patch: Partial<AppSettings>) => {
     setLocal((prev) => ({ ...prev, ...patch }));
@@ -31,7 +35,10 @@ export function SettingsPage() {
 
   const handleSave = async () => {
     setSaving(true);
-    await updateSettings(local);
+    await updateSettings({
+      ...local,
+      deviceScanIntervalSeconds: clampScanInterval(local.deviceScanIntervalSeconds),
+    });
     setSaving(false);
   };
 
@@ -147,9 +154,42 @@ export function SettingsPage() {
         )}
       </div>
 
+      <h2 className="sec-title">设备自动扫描</h2>
+      <div className="card">
+        <div className="setting-row">
+          <div>
+            <div style={{ fontWeight: 500 }}>启动并定时扫描设备</div>
+            <div style={{ color: "var(--t2)", fontSize: 11 }}>自动刷新 USB 设备和 Android 11+ WiFi 无线调试设备</div>
+          </div>
+          <Toggle
+            on={local.autoScanDevices}
+            onChange={(v) => updateLocal({ autoScanDevices: v })}
+          />
+        </div>
+        <div className="setting-row">
+          <div>
+            <div style={{ fontWeight: 500 }}>扫描间隔</div>
+            <div style={{ color: "var(--t2)", fontSize: 11 }}>范围 5-600 秒，间隔越短刷新越及时</div>
+          </div>
+          <input
+            className="inp"
+            type="number"
+            min={5}
+            max={600}
+            value={local.deviceScanIntervalSeconds}
+            onChange={(e) => {
+              const value = parseInt(e.target.value, 10);
+              updateLocal({ deviceScanIntervalSeconds: Number.isFinite(value) ? value : 30 });
+            }}
+            style={{ width: 88, textAlign: "center" }}
+            disabled={!local.autoScanDevices}
+          />
+        </div>
+      </div>
+
       <h2 className="sec-title">默认投屏配置</h2>
       <div className="card">
-        <div className="grid3" style={{ marginBottom: 10 }}>
+        <div className="grid4" style={{ marginBottom: 10 }}>
           <div className="col">
             <label style={{ fontSize: 11, color: "var(--t2)", fontWeight: 600 }}>分辨率</label>
             <Dropdown
@@ -172,6 +212,14 @@ export function SettingsPage() {
               value={local.defaultMirrorConfig.maxFps}
               onChange={(v) => updateDefaultConfig({ maxFps: v })}
               options={OPT_FPS}
+            />
+          </div>
+          <div className="col">
+            <label style={{ fontSize: 11, color: "var(--t2)", fontWeight: 600 }}>编码</label>
+            <Dropdown
+              value={local.defaultMirrorConfig.videoCodec}
+              onChange={(v) => updateDefaultConfig({ videoCodec: v })}
+              options={OPT_CODEC}
             />
           </div>
         </div>
@@ -248,4 +296,9 @@ export function SettingsPage() {
       </div>
     </div>
   );
+}
+
+function clampScanInterval(value: number): number {
+  if (!Number.isFinite(value)) return 30;
+  return Math.min(600, Math.max(5, Math.round(value)));
 }

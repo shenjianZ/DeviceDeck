@@ -18,3 +18,20 @@ pub struct AndroidDeviceProps {
     pub screen_size: Option<String>,
     pub battery_level: Option<i32>,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WirelessAdbServiceType {
+    Pairing,
+    Connect,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WirelessAdbService {
+    pub id: String,
+    pub name: String,
+    pub host: String,
+    pub port: u16,
+    pub service_type: WirelessAdbServiceType,
+}

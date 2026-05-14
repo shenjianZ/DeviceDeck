@@ -24,6 +24,7 @@ const DEFAULT_CONFIG: MirrorConfig = {
   maxSize: "1080",
   videoBitRate: "8M",
   maxFps: "60",
+  videoCodec: "h264",
   noControl: false,
   stayAwake: true,
   turnScreenOff: false,
@@ -39,7 +40,16 @@ export const useMirrorStore = create<MirrorStore>((set, get) => ({
   updateConfig: (patch) =>
     set((state) => ({ config: { ...state.config, ...patch } })),
 
-  applyPreset: (config) => set({ config: { ...config } }),
+  applyPreset: (config) =>
+    set((state) => ({
+      config: {
+        ...state.config,
+        maxSize: config.maxSize,
+        videoBitRate: config.videoBitRate,
+        maxFps: config.maxFps,
+        videoCodec: config.videoCodec,
+      },
+    })),
 
   startMirror: async (serial) => {
     set({ isStarting: true, error: null });

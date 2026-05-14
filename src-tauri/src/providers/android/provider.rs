@@ -10,6 +10,7 @@ use crate::core::types::{
     AppSettings, DeviceInfo, DevicePlatform, DeviceStatus, EnvironmentStatus, MirrorConfig,
     MirrorSession, SessionStatus, ToolStatus,
 };
+use crate::providers::android::types::WirelessAdbService;
 use crate::providers::provider_trait::DeviceProvider;
 use crate::sidecar::binary_resolver::BinaryResolver;
 use crate::sidecar::shell_runner::ShellRunner;
@@ -32,10 +33,7 @@ impl AndroidProvider {
     }
 
     fn current_settings(&self) -> AppSettings {
-        self.settings
-            .lock()
-            .map(|s| s.clone())
-            .unwrap_or_default()
+        self.settings.lock().map(|s| s.clone()).unwrap_or_default()
     }
 
     fn resolve_adb(&self) -> Result<std::path::PathBuf, AppError> {
@@ -73,6 +71,11 @@ impl AndroidProvider {
         let endpoint = format!("{}:{}", host.trim(), port);
         adb::execute_adb_connect(&adb_path, &endpoint).await?;
         self.get_device_detail(&endpoint).await
+    }
+
+    pub async fn discover_wireless_services(&self) -> Result<Vec<WirelessAdbService>, AppError> {
+        let adb_path = self.resolve_adb()?;
+        adb::execute_adb_mdns_services(&adb_path).await
     }
 
     pub async fn pair_wireless_device(
@@ -226,9 +229,7 @@ impl DeviceProvider for AndroidProvider {
             let mut info = adb::raw_device_to_info(raw);
 
             if info.status == DeviceStatus::Online {
-                if let Ok(props) =
-                    adb::execute_get_device_props(&adb_path, &info.serial).await
-                {
+                if let Ok(props) = adb::execute_get_device_props(&adb_path, &info.serial).await {
                     info.name = if props.model.is_empty() {
                         info.name
                     } else {

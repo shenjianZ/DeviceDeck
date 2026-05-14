@@ -1,6 +1,7 @@
 export type DevicePlatform = "android" | "ios" | "androidTv" | "unknown";
 export type DeviceStatus = "online" | "offline" | "unauthorized" | "busy" | "unknown";
 export type ConnectionType = "usb" | "wifi" | "unknown";
+export type WirelessAdbServiceType = "pairing" | "connect";
 export type DeviceCapability =
   | "mirror"
   | "control"
@@ -26,4 +27,12 @@ export interface DeviceInfo {
   screenSize?: string;
   batteryLevel?: number | null;
   capabilities: DeviceCapability[];
+}
+
+export interface WirelessAdbService {
+  id: string;
+  name: string;
+  host: string;
+  port: number;
+  serviceType: WirelessAdbServiceType;
 }

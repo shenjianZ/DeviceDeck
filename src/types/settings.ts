@@ -9,6 +9,8 @@ export interface AppSettings {
   lastMirrorConfig?: MirrorConfig | null;
   theme: string;
   logRetentionDays: number;
+  autoScanDevices: boolean;
+  deviceScanIntervalSeconds: number;
 }
 
 export interface ToolStatus {

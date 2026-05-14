@@ -76,6 +76,8 @@ pub struct MirrorConfig {
     pub max_size: String,
     pub video_bit_rate: String,
     pub max_fps: String,
+    #[serde(default = "default_video_codec")]
+    pub video_codec: String,
     pub no_control: bool,
     pub stay_awake: bool,
     pub turn_screen_off: bool,
@@ -87,11 +89,16 @@ impl Default for MirrorConfig {
             max_size: "1080".into(),
             video_bit_rate: "8M".into(),
             max_fps: "60".into(),
+            video_codec: default_video_codec(),
             no_control: false,
             stay_awake: true,
             turn_screen_off: false,
         }
     }
+}
+
+fn default_video_codec() -> String {
+    "h264".into()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -183,6 +190,10 @@ pub struct AppSettings {
     pub last_mirror_config: Option<MirrorConfig>,
     pub theme: String,
     pub log_retention_days: u32,
+    #[serde(default = "default_auto_scan_devices")]
+    pub auto_scan_devices: bool,
+    #[serde(default = "default_device_scan_interval_seconds")]
+    pub device_scan_interval_seconds: u32,
 }
 
 impl Default for AppSettings {
@@ -196,6 +207,70 @@ impl Default for AppSettings {
             last_mirror_config: None,
             theme: "dark".into(),
             log_retention_days: 7,
+            auto_scan_devices: default_auto_scan_devices(),
+            device_scan_interval_seconds: default_device_scan_interval_seconds(),
         }
+    }
+}
+
+fn default_auto_scan_devices() -> bool {
+    true
+}
+
+fn default_device_scan_interval_seconds() -> u32 {
+    30
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn app_settings_default_enables_device_auto_scan() {
+        let settings = AppSettings::default();
+
+        assert!(settings.auto_scan_devices);
+        assert_eq!(settings.device_scan_interval_seconds, 30);
+    }
+
+    #[test]
+    fn app_settings_deserializes_old_config_without_scan_fields() {
+        let json = r#"{
+            "useBundledAdb": true,
+            "useBundledScrcpy": true,
+            "customAdbPath": "",
+            "customScrcpyPath": "",
+            "defaultMirrorConfig": {
+                "maxSize": "1080",
+                "videoBitRate": "8M",
+                "maxFps": "60",
+                "noControl": false,
+                "stayAwake": true,
+                "turnScreenOff": false
+            },
+            "theme": "dark",
+            "logRetentionDays": 7
+        }"#;
+
+        let settings: AppSettings = serde_json::from_str(json).expect("old config should load");
+
+        assert!(settings.auto_scan_devices);
+        assert_eq!(settings.device_scan_interval_seconds, 30);
+    }
+
+    #[test]
+    fn mirror_config_deserializes_old_config_without_video_codec() {
+        let json = r#"{
+            "maxSize": "1080",
+            "videoBitRate": "8M",
+            "maxFps": "60",
+            "noControl": false,
+            "stayAwake": true,
+            "turnScreenOff": false
+        }"#;
+
+        let config: MirrorConfig = serde_json::from_str(json).expect("old mirror config should load");
+
+        assert_eq!(config.video_codec, "h264");
     }
 }

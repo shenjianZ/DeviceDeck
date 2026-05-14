@@ -3,6 +3,7 @@ use std::sync::Arc;
 use crate::core::error::AppError;
 use crate::core::types::DeviceInfo;
 use crate::providers::android::provider::AndroidProvider;
+use crate::providers::android::types::WirelessAdbService;
 use crate::providers::provider_trait::DeviceProvider;
 
 pub struct DeviceService {
@@ -22,12 +23,28 @@ impl DeviceService {
         self.android_provider.get_device_detail(serial).await
     }
 
-    pub async fn enable_wireless_device(&self, serial: &str, port: u16) -> Result<DeviceInfo, AppError> {
-        self.android_provider.enable_wireless_device(serial, port).await
+    pub async fn enable_wireless_device(
+        &self,
+        serial: &str,
+        port: u16,
+    ) -> Result<DeviceInfo, AppError> {
+        self.android_provider
+            .enable_wireless_device(serial, port)
+            .await
     }
 
-    pub async fn connect_wireless_device(&self, host: &str, port: u16) -> Result<DeviceInfo, AppError> {
-        self.android_provider.connect_wireless_device(host, port).await
+    pub async fn connect_wireless_device(
+        &self,
+        host: &str,
+        port: u16,
+    ) -> Result<DeviceInfo, AppError> {
+        self.android_provider
+            .connect_wireless_device(host, port)
+            .await
+    }
+
+    pub async fn discover_wireless_services(&self) -> Result<Vec<WirelessAdbService>, AppError> {
+        self.android_provider.discover_wireless_services().await
     }
 
     pub async fn pair_wireless_device(
@@ -42,6 +59,8 @@ impl DeviceService {
     }
 
     pub async fn disconnect_wireless_device(&self, serial: &str) -> Result<(), AppError> {
-        self.android_provider.disconnect_wireless_device(serial).await
+        self.android_provider
+            .disconnect_wireless_device(serial)
+            .await
     }
 }

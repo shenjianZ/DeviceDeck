@@ -21,6 +21,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     maxSize: "1080",
     videoBitRate: "8M",
     maxFps: "60",
+    videoCodec: "h264",
     noControl: false,
     stayAwake: true,
     turnScreenOff: false,
@@ -28,6 +29,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   lastMirrorConfig: null,
   theme: "dark",
   logRetentionDays: 7,
+  autoScanDevices: true,
+  deviceScanIntervalSeconds: 30,
 };
 
 export const useSettingsStore = create<SettingsStore>((set) => ({

@@ -4,11 +4,12 @@ export const PRESETS: MirrorPreset[] = [
   {
     id: "smooth",
     name: "流畅模式",
-    description: "720p · 4M · 60fps",
+    description: "720p / 4M / 60fps / H.264",
     config: {
       maxSize: "720",
       videoBitRate: "4M",
       maxFps: "60",
+      videoCodec: "h264",
       noControl: false,
       stayAwake: true,
       turnScreenOff: false,
@@ -17,11 +18,12 @@ export const PRESETS: MirrorPreset[] = [
   {
     id: "hd",
     name: "高清模式",
-    description: "1080p · 8M · 60fps",
+    description: "1080p / 8M / 60fps / H.264",
     config: {
       maxSize: "1080",
       videoBitRate: "8M",
       maxFps: "60",
+      videoCodec: "h264",
       noControl: false,
       stayAwake: true,
       turnScreenOff: false,
@@ -30,25 +32,27 @@ export const PRESETS: MirrorPreset[] = [
   {
     id: "ultra",
     name: "极清模式",
-    description: "1440p · 16M · 60fps",
+    description: "原生 / 32M / 60fps / H.264",
     config: {
-      maxSize: "1440",
-      videoBitRate: "16M",
+      maxSize: "native",
+      videoBitRate: "32M",
       maxFps: "60",
+      videoCodec: "h264",
       noControl: false,
       stayAwake: true,
       turnScreenOff: false,
     },
   },
   {
-    id: "readonly",
-    name: "只读演示",
-    description: "1080p · 8M · 60fps · 只读",
+    id: "h265-max",
+    name: "H.265 极致",
+    description: "原生 / 50M / 60fps / H.265",
     config: {
-      maxSize: "1080",
-      videoBitRate: "8M",
+      maxSize: "native",
+      videoBitRate: "50M",
       maxFps: "60",
-      noControl: true,
+      videoCodec: "h265",
+      noControl: false,
       stayAwake: true,
       turnScreenOff: false,
     },
@@ -59,7 +63,7 @@ export const OPT_RES = [
   { value: "720", label: "720p" },
   { value: "1080", label: "1080p" },
   { value: "1440", label: "1440p" },
-  { value: "native", label: "原始" },
+  { value: "native", label: "原生" },
 ];
 
 export const OPT_BR = [
@@ -67,6 +71,9 @@ export const OPT_BR = [
   { value: "4M", label: "4M" },
   { value: "8M", label: "8M" },
   { value: "16M", label: "16M" },
+  { value: "24M", label: "24M" },
+  { value: "32M", label: "32M" },
+  { value: "50M", label: "50M" },
 ];
 
 export const OPT_FPS = [
@@ -74,6 +81,12 @@ export const OPT_FPS = [
   { value: "60", label: "60fps" },
   { value: "90", label: "90fps" },
   { value: "120", label: "120fps" },
+];
+
+export const OPT_CODEC = [
+  { value: "h264", label: "H.264 兼容" },
+  { value: "h265", label: "H.265 高画质" },
+  { value: "av1", label: "AV1" },
 ];
 
 export const CAP_NAMES: Record<string, string> = {

@@ -87,6 +87,12 @@ impl AppError {
             .with_suggestion("请确认手机已连接 WiFi，并与电脑处于同一局域网")
     }
 
+    pub fn wireless_discovery_failed(reason: &str) -> Self {
+        Self::new("WIRELESS_DISCOVERY_FAILED", "无线设备扫描失败")
+            .with_detail(reason)
+            .with_suggestion("请确认 ADB 可用，并已在 Android 无线调试页面开启无线调试")
+    }
+
     pub fn invalid_config(reason: &str) -> Self {
         Self::new("INVALID_CONFIG", "无效的配置参数")
             .with_detail(reason)

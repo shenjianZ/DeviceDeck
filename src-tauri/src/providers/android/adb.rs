@@ -1,9 +1,11 @@
 use std::path::Path;
 
 use super::parser;
-use super::types::{AndroidDeviceProps, RawDevice};
+use super::types::{AndroidDeviceProps, RawDevice, WirelessAdbService};
 use crate::core::error::AppError;
-use crate::core::types::{ConnectionType, DeviceCapability, DeviceInfo, DevicePlatform, DeviceStatus};
+use crate::core::types::{
+    ConnectionType, DeviceCapability, DeviceInfo, DevicePlatform, DeviceStatus,
+};
 use crate::sidecar::shell_runner::ShellRunner;
 
 pub async fn execute_adb_version(adb_path: &Path) -> Result<String, AppError> {
@@ -25,7 +27,27 @@ pub async fn execute_adb_devices(adb_path: &Path) -> Result<Vec<RawDevice>, AppE
     Ok(parser::parse_adb_devices(&output.stdout))
 }
 
-pub async fn execute_get_device_props(adb_path: &Path, serial: &str) -> Result<AndroidDeviceProps, AppError> {
+pub async fn execute_adb_mdns_services(
+    adb_path: &Path,
+) -> Result<Vec<WirelessAdbService>, AppError> {
+    let output = ShellRunner::execute_with_timeout(
+        adb_path,
+        &["mdns", "services"],
+        std::time::Duration::from_secs(8),
+    )
+    .await?;
+
+    if !output.success {
+        return Err(AppError::wireless_discovery_failed(&output.stderr));
+    }
+
+    Ok(parser::parse_adb_mdns_services(&output.stdout))
+}
+
+pub async fn execute_get_device_props(
+    adb_path: &Path,
+    serial: &str,
+) -> Result<AndroidDeviceProps, AppError> {
     let getprop_output = ShellRunner::execute_with_timeout(
         adb_path,
         &["-s", serial, "shell", "getprop"],
@@ -49,7 +71,9 @@ pub async fn execute_get_device_props(adb_path: &Path, serial: &str) -> Result<A
     )
     .await;
 
-    let screen_size = wm_size_output.ok().and_then(|o| parser::parse_wm_size(&o.stdout));
+    let screen_size = wm_size_output
+        .ok()
+        .and_then(|o| parser::parse_wm_size(&o.stdout));
 
     let battery_output = ShellRunner::execute_with_timeout(
         adb_path,
@@ -58,7 +82,9 @@ pub async fn execute_get_device_props(adb_path: &Path, serial: &str) -> Result<A
     )
     .await;
 
-    let battery_level = battery_output.ok().and_then(|o| parser::parse_battery_level(&o.stdout));
+    let battery_level = battery_output
+        .ok()
+        .and_then(|o| parser::parse_battery_level(&o.stdout));
 
     Ok(AndroidDeviceProps {
         model,
@@ -85,7 +111,9 @@ pub async fn execute_get_device_ip(adb_path: &Path, serial: &str) -> Result<Stri
 
     let wlan_output = ShellRunner::execute_with_timeout(
         adb_path,
-        &["-s", serial, "shell", "ip", "-f", "inet", "addr", "show", "wlan0"],
+        &[
+            "-s", serial, "shell", "ip", "-f", "inet", "addr", "show", "wlan0",
+        ],
         std::time::Duration::from_secs(5),
     )
     .await?;

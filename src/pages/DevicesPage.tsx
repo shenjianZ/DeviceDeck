@@ -21,18 +21,14 @@ export function DevicesPage() {
   const selectedDevice = devices.find((d) => d.id === selectedDeviceId) ?? null;
 
   const handleSelect = (device: DeviceInfo) => {
-    if (selectedDeviceId === device.id) {
-      selectDevice(null);
-    } else {
-      selectDevice(device.id);
-    }
+    selectDevice(selectedDeviceId === device.id ? null : device.id);
   };
 
-  const startMirrorFor = (_serial: string) => {
+  const startMirrorFor = () => {
     setPage("mirror");
   };
 
-  const startWirelessMirrorFor = async (serial: string) => {
+  const switchUsbToWifiAndMirror = async (serial: string) => {
     await startWirelessMirror(serial, 5555);
     setPage("mirror");
     await scanDevices();
@@ -66,39 +62,39 @@ export function DevicesPage() {
       {devices.length === 0 ? (
         <div className="empty">
           <Smartphone size={32} />
-          <span>未检测到设备，请连接设备后点击「扫描设备」</span>
+          <span>未检测到设备，请连接设备后点击“扫描设备”。</span>
         </div>
       ) : (
         <div style={{ display: "flex", gap: 16 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div className="grid2">
-              {devices.map((d) => (
+              {devices.map((device) => (
                 <div
-                  key={d.id}
-                  className={`card${selectedDeviceId === d.id ? " selected" : ""}`}
+                  key={device.id}
+                  className={`card${selectedDeviceId === device.id ? " selected" : ""}`}
                   style={{ cursor: "pointer" }}
-                  onClick={() => handleSelect(d)}
+                  onClick={() => handleSelect(device)}
                 >
                   <div className="row" style={{ marginBottom: 8 }}>
-                    {d.connectionType === "wifi" ? <Wifi size={14} /> : <Usb size={14} />}
+                    {device.connectionType === "wifi" ? <Wifi size={14} /> : <Usb size={14} />}
                     <span style={{ fontWeight: 600, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {d.name || d.model}
+                      {device.name || device.model || device.serial}
                     </span>
-                    <Badge variant={statusBadgeVariant(d.status)}>
-                      {STATUS_NAMES[d.status] ?? d.status}
+                    <Badge variant={statusBadgeVariant(device.status)}>
+                      {STATUS_NAMES[device.status] ?? device.status}
                     </Badge>
                   </div>
                   <div style={{ color: "var(--t2)", fontSize: 11, marginBottom: 6 }} className="mono">
-                    {d.serial}
+                    {device.serial}
                   </div>
                   <div className="row" style={{ flexWrap: "wrap", gap: 3 }}>
-                    {d.capabilities.slice(0, 4).map((cap) => (
+                    {device.capabilities.slice(0, 4).map((cap) => (
                       <span key={cap} className="cap-tag">
                         {CAP_NAMES[cap] ?? cap}
                       </span>
                     ))}
-                    {d.capabilities.length > 4 && (
-                      <span className="cap-tag off">+{d.capabilities.length - 4}</span>
+                    {device.capabilities.length > 4 && (
+                      <span className="cap-tag off">+{device.capabilities.length - 4}</span>
                     )}
                   </div>
                   <div className="row" style={{ marginTop: 8, justifyContent: "flex-end" }}>
@@ -113,7 +109,7 @@ export function DevicesPage() {
             <div style={{ width: 300, flexShrink: 0 }}>
               <div className="card" style={{ position: "sticky", top: 0 }}>
                 <div className="row" style={{ marginBottom: 12, justifyContent: "space-between" }}>
-                  <span style={{ fontWeight: 600, fontSize: 14 }}>{selectedDevice.name || selectedDevice.model}</span>
+                  <span style={{ fontWeight: 600, fontSize: 14 }}>{selectedDevice.name || selectedDevice.model || selectedDevice.serial}</span>
                   <button
                     className="btn btn-g"
                     style={{ padding: 2, minHeight: "auto" }}
@@ -173,22 +169,24 @@ export function DevicesPage() {
                 <button
                   className="btn btn-p"
                   style={{ width: "100%", justifyContent: "center" }}
-                  onClick={() => startMirrorFor(selectedDevice.serial)}
+                  onClick={startMirrorFor}
                   disabled={selectedDevice.status !== "online"}
                   type="button"
                 >
-                  投屏
+                  进入投屏
                 </button>
 
-                <button
-                  className="btn btn-s"
-                  style={{ width: "100%", justifyContent: "center", marginTop: 8 }}
-                  onClick={() => startWirelessMirrorFor(selectedDevice.serial)}
-                  disabled={selectedDevice.status !== "online" || isWirelessBusy || isStartingMirror}
-                  type="button"
-                >
-                  一键无线投屏
-                </button>
+                {selectedDevice.connectionType === "usb" && (
+                  <button
+                    className="btn btn-s"
+                    style={{ width: "100%", justifyContent: "center", marginTop: 8 }}
+                    onClick={() => switchUsbToWifiAndMirror(selectedDevice.serial)}
+                    disabled={selectedDevice.status !== "online" || isWirelessBusy || isStartingMirror}
+                    type="button"
+                  >
+                    USB 切 WiFi 并投屏
+                  </button>
+                )}
 
                 {selectedDevice.status !== "online" && (
                   <div className="detail-notice" style={{ background: "var(--wrn-s)", color: "var(--wrn)" }}>

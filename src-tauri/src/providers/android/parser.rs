@@ -1,4 +1,4 @@
-use super::types::RawDevice;
+use super::types::{RawDevice, WirelessAdbService, WirelessAdbServiceType};
 
 pub fn parse_adb_devices(output: &str) -> Vec<RawDevice> {
     let mut devices = Vec::new();
@@ -128,7 +128,103 @@ pub fn parse_wlan_ip(output: &str) -> Option<String> {
     None
 }
 
+pub fn parse_adb_mdns_services(output: &str) -> Vec<WirelessAdbService> {
+    output
+        .lines()
+        .filter_map(parse_adb_mdns_service_line)
+        .collect()
+}
+
+fn parse_adb_mdns_service_line(line: &str) -> Option<WirelessAdbService> {
+    let line = line.trim();
+    if line.is_empty() || line.starts_with("List of discovered") {
+        return None;
+    }
+
+    let service_type = if line.contains("_adb-tls-pairing._tcp") {
+        WirelessAdbServiceType::Pairing
+    } else if line.contains("_adb-tls-connect._tcp") {
+        WirelessAdbServiceType::Connect
+    } else {
+        return None;
+    };
+
+    let endpoint = line.split_whitespace().rev().find_map(parse_endpoint)?;
+
+    let name = line
+        .split_whitespace()
+        .next()
+        .unwrap_or("Android")
+        .trim_end_matches('.')
+        .to_string();
+
+    let service_prefix = match service_type {
+        WirelessAdbServiceType::Pairing => "pairing",
+        WirelessAdbServiceType::Connect => "connect",
+    };
+
+    Some(WirelessAdbService {
+        id: format!("{service_prefix}:{}:{}", endpoint.0, endpoint.1),
+        name,
+        host: endpoint.0,
+        port: endpoint.1,
+        service_type,
+    })
+}
+
+fn parse_endpoint(token: &str) -> Option<(String, u16)> {
+    let endpoint = token.trim().trim_end_matches('.');
+    let (host, port) = endpoint.rsplit_once(':')?;
+    if !is_ipv4(host) {
+        return None;
+    }
+    let port = port.parse::<u16>().ok()?;
+    Some((host.to_string(), port))
+}
+
 fn is_ipv4(value: &str) -> bool {
     let parts: Vec<&str> = value.split('.').collect();
     parts.len() == 4 && parts.iter().all(|part| part.parse::<u8>().is_ok())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::providers::android::types::WirelessAdbServiceType;
+
+    #[test]
+    fn parses_wireless_pairing_and_connect_services() {
+        let output = r#"
+List of discovered mdns services
+adb-123456	_adb-tls-pairing._tcp.	192.168.1.23:37123
+adb-123456	_adb-tls-connect._tcp.	192.168.1.23:42123
+"#;
+
+        let services = parse_adb_mdns_services(output);
+
+        assert_eq!(services.len(), 2);
+        assert_eq!(services[0].name, "adb-123456");
+        assert_eq!(services[0].host, "192.168.1.23");
+        assert_eq!(services[0].port, 37123);
+        assert_eq!(services[0].service_type, WirelessAdbServiceType::Pairing);
+        assert_eq!(services[1].service_type, WirelessAdbServiceType::Connect);
+        assert_eq!(services[1].port, 42123);
+    }
+
+    #[test]
+    fn ignores_non_adb_mdns_rows_and_invalid_endpoints() {
+        let output = r#"
+List of discovered mdns services
+printer	_ipp._tcp.	192.168.1.50:631
+adb-bad	_adb-tls-connect._tcp.	not-an-endpoint
+adb-bad-port	_adb-tls-pairing._tcp.	192.168.1.24:abc
+adb-ok	_adb-tls-connect._tcp.	192.168.1.25:39001
+"#;
+
+        let services = parse_adb_mdns_services(output);
+
+        assert_eq!(services.len(), 1);
+        assert_eq!(services[0].id, "connect:192.168.1.25:39001");
+        assert_eq!(services[0].service_type, WirelessAdbServiceType::Connect);
+    }
 }

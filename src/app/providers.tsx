@@ -8,10 +8,13 @@ import { AppShell } from "../components/layout/AppShell";
 
 export function AppProviders() {
   const checkEnvironment = useDeviceStore((s) => s.checkEnvironment);
+  const scanDevices = useDeviceStore((s) => s.scanDevices);
+  const discoverWirelessDevices = useDeviceStore((s) => s.discoverWirelessDevices);
   const loadLogs = useLogStore((s) => s.loadLogs);
   const startLogListening = useLogStore((s) => s.startListening);
   const startSessionListening = useMirrorStore((s) => s.startListening);
   const loadSettings = useSettingsStore((s) => s.loadSettings);
+  const settings = useSettingsStore((s) => s.settings);
   const refreshSessions = useMirrorStore((s) => s.refreshSessions);
 
   const [theme, setTheme] = useState<"dark" | "light">(() => {
@@ -51,6 +54,14 @@ export function AppProviders() {
         loadSettings(),
         refreshSessions(),
       ]);
+
+      const currentSettings = useSettingsStore.getState().settings;
+      if (!cancelled && currentSettings.autoScanDevices) {
+        await Promise.all([
+          scanDevices(),
+          discoverWirelessDevices(),
+        ]);
+      }
     };
 
     init();
@@ -60,11 +71,33 @@ export function AppProviders() {
       unlistenRefs.current.forEach((fn) => fn());
       unlistenRefs.current = [];
     };
-  }, [checkEnvironment, loadLogs, loadSettings, refreshSessions, startLogListening, startSessionListening]);
+  }, [checkEnvironment, discoverWirelessDevices, loadLogs, loadSettings, refreshSessions, scanDevices, startLogListening, startSessionListening]);
+
+  useEffect(() => {
+    if (!settings.autoScanDevices) return;
+
+    const intervalSeconds = clampScanInterval(settings.deviceScanIntervalSeconds);
+    const timer = window.setInterval(() => {
+      scanDevices();
+      discoverWirelessDevices();
+    }, intervalSeconds * 1000);
+
+    return () => window.clearInterval(timer);
+  }, [
+    discoverWirelessDevices,
+    scanDevices,
+    settings.autoScanDevices,
+    settings.deviceScanIntervalSeconds,
+  ]);
 
   const toggleTheme = () => {
     setTheme((prev) => (prev === "dark" ? "light" : "dark"));
   };
 
   return <AppShell theme={theme} onToggleTheme={toggleTheme} />;
+}
+
+function clampScanInterval(value: number): number {
+  if (!Number.isFinite(value)) return 30;
+  return Math.min(600, Math.max(5, Math.round(value)));
 }

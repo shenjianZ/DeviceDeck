@@ -1,11 +1,13 @@
 import { create } from "zustand";
 import { tauriApi } from "../lib/tauri";
-import type { DeviceInfo, EnvironmentStatus, AppError } from "../types";
+import type { DeviceInfo, EnvironmentStatus, AppError, WirelessAdbService } from "../types";
 
 interface DeviceStore {
   devices: DeviceInfo[];
+  wirelessServices: WirelessAdbService[];
   selectedDeviceId: string | null;
   isScanning: boolean;
+  isDiscoveringWireless: boolean;
   isWirelessBusy: boolean;
   environment: EnvironmentStatus | null;
   error: AppError | null;
@@ -13,6 +15,7 @@ interface DeviceStore {
 
   checkEnvironment: () => Promise<void>;
   scanDevices: () => Promise<void>;
+  discoverWirelessDevices: () => Promise<void>;
   selectDevice: (id: string | null) => void;
   refreshDeviceDetail: (serial: string) => Promise<void>;
   enableWirelessDevice: (serial: string, port?: number) => Promise<DeviceInfo | null>;
@@ -24,8 +27,10 @@ interface DeviceStore {
 
 export const useDeviceStore = create<DeviceStore>((set) => ({
   devices: [],
+  wirelessServices: [],
   selectedDeviceId: null,
   isScanning: false,
+  isDiscoveringWireless: false,
   isWirelessBusy: false,
   environment: null,
   error: null,
@@ -47,6 +52,16 @@ export const useDeviceStore = create<DeviceStore>((set) => ({
       set({ devices, isScanning: false });
     } catch (e: unknown) {
       set({ error: e as AppError, isScanning: false });
+    }
+  },
+
+  discoverWirelessDevices: async () => {
+    set({ isDiscoveringWireless: true, error: null });
+    try {
+      const wirelessServices = await tauriApi.discoverWirelessDevices();
+      set({ wirelessServices, isDiscoveringWireless: false });
+    } catch (e: unknown) {
+      set({ error: e as AppError, isDiscoveringWireless: false });
     }
   },
 

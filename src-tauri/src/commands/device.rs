@@ -1,5 +1,6 @@
 use crate::core::error::AppError;
 use crate::core::types::DeviceInfo;
+use crate::providers::android::types::WirelessAdbService;
 use crate::services::device::DeviceService;
 
 #[tauri::command]
@@ -33,6 +34,13 @@ pub async fn connect_wireless_device(
     port: u16,
 ) -> Result<DeviceInfo, AppError> {
     device_service.connect_wireless_device(&host, port).await
+}
+
+#[tauri::command]
+pub async fn discover_wireless_devices(
+    device_service: tauri::State<'_, DeviceService>,
+) -> Result<Vec<WirelessAdbService>, AppError> {
+    device_service.discover_wireless_services().await
 }
 
 #[tauri::command]
