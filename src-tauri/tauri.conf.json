@@ -13,25 +13,39 @@
         "windows": [
             {
                 "title": "DeviceDeck",
-                "width": 800,
+                "width": 900,
                 "height": 640,
                 "x": 500,
-                "y": 100
+                "y": 100,
+                "minWidth": 760,
+                "minHeight": 500,
+                "decorations": false,
+                "transparent": false
             }
         ],
         "security": {
             "csp": null
         }
     },
-  "bundle": {
-    "active": true,
-    "targets": "all",
-    "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
+    "bundle": {
+        "active": true,
+        "targets": "all",
+        "icon": [
+            "icons/32x32.png",
+            "icons/128x128.png",
             "icons/128x128@2x.png",
             "icons/icon.icns",
             "icons/icon.ico"
-        ]
+        ],
+        "createUpdaterArtifacts": true
+    },
+    "plugins": {
+        "updater": {
+            "pubkey": "__DEVICEDECK_TAURI_UPDATER_PUBLIC_KEY__",
+            "endpoints": [
+                "https://github.com/shenjianZ/DeviceDeck/releases/latest/download/latest.json"
+            ],
+            "windows": { "installMode": "passive" }
+        }
     }
 }

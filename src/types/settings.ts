@@ -11,6 +11,10 @@ export interface AppSettings {
   logRetentionDays: number;
   autoScanDevices: boolean;
   deviceScanIntervalSeconds: number;
+  fontSize?: number;
+  locale?: "zh-CN" | "en";
+  autoStart?: boolean;
+  autoUpdateEnabled?: boolean;
 }
 
 export interface ToolStatus {

@@ -1,0 +1,22 @@
+{
+  "title": "仪表盘",
+  "envStatus": "环境状态",
+  "overview": "概览",
+  "totalDevices": "已连接设备",
+  "onlineCount": "在线",
+  "activeSessions": "投屏会话",
+  "running": "运行中",
+  "logEntries": "日志条目",
+  "totalRecords": "总记录",
+  "quickActions": "快捷操作",
+  "scanDevices": "扫描设备",
+  "scanning": "扫描中...",
+  "deviceManagement": "设备管理",
+  "mirrorControl": "投屏控制",
+  "runLogs": "运行日志",
+  "deviceList": "设备列表",
+  "recentLogs": "最近日志",
+  "noData": "暂无数据，点击「扫描设备」开始",
+  "available": "可用",
+  "detecting": "检测中..."
+}

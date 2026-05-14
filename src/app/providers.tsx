@@ -4,6 +4,7 @@ import { useDeviceStore } from "../stores/deviceStore";
 import { useLogStore } from "../stores/logStore";
 import { useMirrorStore } from "../stores/mirrorStore";
 import { useSettingsStore } from "../stores/settingsStore";
+import { applyTheme } from "../lib/theme";
 import { AppShell } from "../components/layout/AppShell";
 
 export function AppProviders() {
@@ -24,9 +25,16 @@ export function AppProviders() {
 
   const unlistenRefs = useRef<UnlistenFn[]>([]);
 
+  // Sync theme from store to local state (when settings load from backend)
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem("dd-theme", theme);
+    const t = settings.theme;
+    if (t === "light" || t === "dark") {
+      setTheme(t);
+    }
+  }, [settings.theme]);
+
+  useEffect(() => {
+    applyTheme(theme);
   }, [theme]);
 
   useEffect(() => {
@@ -58,8 +66,8 @@ export function AppProviders() {
       const currentSettings = useSettingsStore.getState().settings;
       if (!cancelled && currentSettings.autoScanDevices) {
         await Promise.all([
-          scanDevices(),
-          discoverWirelessDevices(),
+          scanDevices(true),
+          discoverWirelessDevices(true),
         ]);
       }
     };
@@ -78,8 +86,8 @@ export function AppProviders() {
 
     const intervalSeconds = clampScanInterval(settings.deviceScanIntervalSeconds);
     const timer = window.setInterval(() => {
-      scanDevices();
-      discoverWirelessDevices();
+      scanDevices(true);
+      discoverWirelessDevices(true);
     }, intervalSeconds * 1000);
 
     return () => window.clearInterval(timer);

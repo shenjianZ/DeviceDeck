@@ -1,0 +1,22 @@
+{
+  "title": "Dashboard",
+  "envStatus": "Environment Status",
+  "overview": "Overview",
+  "totalDevices": "Connected Devices",
+  "onlineCount": "Online",
+  "activeSessions": "Mirror Sessions",
+  "running": "Running",
+  "logEntries": "Log Entries",
+  "totalRecords": "Total",
+  "quickActions": "Quick Actions",
+  "scanDevices": "Scan Devices",
+  "scanning": "Scanning...",
+  "deviceManagement": "Device Management",
+  "mirrorControl": "Mirror Control",
+  "runLogs": "Run Logs",
+  "deviceList": "Device List",
+  "recentLogs": "Recent Logs",
+  "noData": "No data yet, click \"Scan Devices\" to start",
+  "available": "Available",
+  "detecting": "Detecting..."
+}

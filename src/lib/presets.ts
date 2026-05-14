@@ -1,10 +1,10 @@
 import type { MirrorPreset } from "../types";
 
-export const PRESETS: MirrorPreset[] = [
+type TFn = (key: string) => string;
+
+export const PRESET_CONFIGS: Omit<MirrorPreset, "name" | "description">[] = [
   {
     id: "smooth",
-    name: "流畅模式",
-    description: "720p / 4M / 60fps / H.264",
     config: {
       maxSize: "720",
       videoBitRate: "4M",
@@ -17,8 +17,6 @@ export const PRESETS: MirrorPreset[] = [
   },
   {
     id: "hd",
-    name: "高清模式",
-    description: "1080p / 8M / 60fps / H.264",
     config: {
       maxSize: "1080",
       videoBitRate: "8M",
@@ -31,8 +29,6 @@ export const PRESETS: MirrorPreset[] = [
   },
   {
     id: "ultra",
-    name: "极清模式",
-    description: "原生 / 32M / 60fps / H.264",
     config: {
       maxSize: "native",
       videoBitRate: "32M",
@@ -45,8 +41,6 @@ export const PRESETS: MirrorPreset[] = [
   },
   {
     id: "h265-max",
-    name: "H.265 极致",
-    description: "原生 / 50M / 60fps / H.265",
     config: {
       maxSize: "native",
       videoBitRate: "50M",
@@ -59,12 +53,40 @@ export const PRESETS: MirrorPreset[] = [
   },
 ];
 
-export const OPT_RES = [
+const PRESET_NAMES: Record<string, string> = {
+  smooth: "presets.smooth.name",
+  hd: "presets.hd.name",
+  ultra: "presets.ultra.name",
+  "h265-max": "presets.h265Max.name",
+};
+
+const PRESET_DESCS: Record<string, string> = {
+  smooth: "presets.smooth.desc",
+  hd: "presets.hd.desc",
+  ultra: "presets.ultra.desc",
+  "h265-max": "presets.h265Max.desc",
+};
+
+export function getPresets(t: TFn): MirrorPreset[] {
+  return PRESET_CONFIGS.map((p) => ({
+    ...p,
+    name: t(PRESET_NAMES[p.id] ?? p.id),
+    description: t(PRESET_DESCS[p.id] ?? ""),
+  }));
+}
+
+export const OPT_RES_VALUES: ({ value: string; label: string } | { value: string; labelKey: string })[] = [
   { value: "720", label: "720p" },
   { value: "1080", label: "1080p" },
   { value: "1440", label: "1440p" },
-  { value: "native", label: "原生" },
+  { value: "native", labelKey: "mirror:native" },
 ];
+
+export function getOptRes(t: TFn): { value: string; label: string }[] {
+  return OPT_RES_VALUES.map((o) =>
+    "labelKey" in o ? { value: o.value, label: t((o as { labelKey: string }).labelKey) } : o as { value: string; label: string }
+  );
+}
 
 export const OPT_BR = [
   { value: "2M", label: "2M" },
@@ -83,49 +105,71 @@ export const OPT_FPS = [
   { value: "120", label: "120fps" },
 ];
 
+export function getOptCodec(t: TFn) {
+  return [
+    { value: "h264", label: `H.264 ${t("mirror:compatible")}` },
+    { value: "h265", label: `H.265 ${t("mirror:highQuality")}` },
+    { value: "av1", label: "AV1" },
+  ];
+}
+
+export function getStatusNames(t: TFn): Record<string, string> {
+  return {
+    online: t("common:status.online"),
+    offline: t("common:status.offline"),
+    unauthorized: t("common:status.unauthorized"),
+    busy: t("common:status.busy"),
+    unknown: t("common:status.unknown"),
+  };
+}
+
+export function getConnNames(t: TFn): Record<string, string> {
+  return {
+    usb: t("devices:usb"),
+    wifi: t("devices:wifi"),
+    unknown: t("common:status.unknown"),
+  };
+}
+
+export function getCapNames(t: TFn): Record<string, string> {
+  return {
+    mirror: t("capabilities.mirror"),
+    control: t("capabilities.control"),
+    screenshot: t("capabilities.screenshot"),
+    recording: t("capabilities.recording"),
+    wireless: t("capabilities.wireless"),
+    installApp: t("capabilities.installApp"),
+    uninstallApp: t("capabilities.uninstallApp"),
+    logs: t("capabilities.logs"),
+    fileTransfer: t("capabilities.fileTransfer"),
+    automation: t("capabilities.automation"),
+  };
+}
+
+export function getSourceNames(t: TFn): Record<string, string> {
+  return {
+    system: t("logs:system"),
+    adb: "ADB",
+    scrcpy: "Scrcpy",
+  };
+}
+
+export function getPageTitles(t: TFn): Record<string, string> {
+  return {
+    dashboard: t("sidebar:dashboard"),
+    devices: t("sidebar:devices"),
+    mirror: t("sidebar:mirror"),
+    logs: t("sidebar:logs"),
+    settings: t("sidebar:settings"),
+  };
+}
+
+// Legacy static exports for backward compatibility (used by SettingsPage OPT_* imports)
+export const OPT_RES = OPT_RES_VALUES.map((o): { value: string; label: string } =>
+  "labelKey" in o ? { value: o.value, label: o.value === "native" ? "原生" : o.value } : o
+);
 export const OPT_CODEC = [
   { value: "h264", label: "H.264 兼容" },
   { value: "h265", label: "H.265 高画质" },
   { value: "av1", label: "AV1" },
 ];
-
-export const CAP_NAMES: Record<string, string> = {
-  mirror: "投屏",
-  control: "控制",
-  screenshot: "截图",
-  recording: "录制",
-  wireless: "无线",
-  installApp: "安装",
-  uninstallApp: "卸载",
-  logs: "日志",
-  fileTransfer: "文件",
-  automation: "自动化",
-};
-
-export const STATUS_NAMES: Record<string, string> = {
-  online: "在线",
-  offline: "离线",
-  unauthorized: "未授权",
-  busy: "忙碌",
-  unknown: "未知",
-};
-
-export const CONN_NAMES: Record<string, string> = {
-  usb: "USB",
-  wifi: "WiFi",
-  unknown: "未知",
-};
-
-export const SOURCE_NAMES: Record<string, string> = {
-  system: "系统",
-  adb: "ADB",
-  scrcpy: "Scrcpy",
-};
-
-export const PAGE_TITLES: Record<string, string> = {
-  dashboard: "仪表盘",
-  devices: "设备管理",
-  mirror: "投屏控制",
-  logs: "运行日志",
-  settings: "设置",
-};

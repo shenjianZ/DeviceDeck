@@ -1,0 +1,321 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.create_release.outputs.id }}
+      body: ${{ steps.changelog.outputs.body }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract changelog
+        id: changelog
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          BODY=$(sed -n "/^## \[${TAG#v}\]/,/^## \[/p" CHANGELOG.md | sed '$d' | tail -n +2)
+          if [ -z "$BODY" ]; then
+            BODY="Release ${TAG}"
+          fi
+          echo "body<<EOF" >> $GITHUB_OUTPUT
+          echo "$BODY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "DeviceDeck ${{ github.ref_name }}"
+          body: ${{ steps.changelog.outputs.body }}
+          draft: true
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build:
+    needs: create-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            artifact_name: windows-x64
+            args: ""
+            rust_target: ""
+          - platform: ubuntu-latest
+            artifact_name: linux-x64
+            args: ""
+            rust_target: ""
+          - platform: macos-latest
+            artifact_name: macos-aarch64
+            args: "--target aarch64-apple-darwin"
+            rust_target: "aarch64-apple-darwin"
+          - platform: macos-latest
+            artifact_name: macos-x64
+            args: "--target x86_64-apple-darwin"
+            rust_target: "x86_64-apple-darwin"
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate release version
+        shell: pwsh
+        run: |
+          $tagVersion = $env:GITHUB_REF_NAME.TrimStart("v")
+          $packageVersion = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $tauriVersion = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          $cargoVersion = (Select-String -Path src-tauri/Cargo.toml -Pattern '^version = "([^"]+)"$').Matches[0].Groups[1].Value
+          if ($packageVersion -ne $tagVersion) { throw "package.json version $packageVersion != tag $tagVersion" }
+          if ($tauriVersion -ne $tagVersion) { throw "tauri.conf.json version $tauriVersion != tag $tagVersion" }
+          if ($cargoVersion -ne $tagVersion) { throw "Cargo.toml version $cargoVersion != tag $tagVersion" }
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Inject updater public key
+        shell: pwsh
+        env:
+          DEVICEDECK_TAURI_UPDATER_PUBLIC_KEY: ${{ secrets.DEVICEDECK_TAURI_UPDATER_PUBLIC_KEY }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:DEVICEDECK_TAURI_UPDATER_PUBLIC_KEY)) {
+            Write-Warning "DEVICEDECK_TAURI_UPDATER_PUBLIC_KEY not set, updater will not work"
+          } else {
+            $path = "src-tauri/tauri.conf.json"
+            $content = Get-Content $path -Raw
+            $content = $content.Replace(
+              "__DEVICEDECK_TAURI_UPDATER_PUBLIC_KEY__",
+              $env:DEVICEDECK_TAURI_UPDATER_PUBLIC_KEY.Trim()
+            )
+            Set-Content -Path $path -Value $content
+          }
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build app
+        run: pnpm tauri build ${{ matrix.args }}
+        env:
+          DEVICEDECK_TAURI_UPDATER_PUBLIC_KEY: ${{ secrets.DEVICEDECK_TAURI_UPDATER_PUBLIC_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.DEVICEDECK_TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.DEVICEDECK_TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: Build updater manifest
+        shell: pwsh
+        run: |
+          $target = "${{ matrix.rust_target }}"
+          if ([string]::IsNullOrWhiteSpace($target)) {
+            $bundleRoot = "src-tauri/target/release/bundle"
+          } else {
+            $bundleRoot = "src-tauri/target/$target/release/bundle"
+          }
+
+          $platformKey = ""
+          $filter = ""
+          $urlSuffix = ""
+
+          switch ("${{ matrix.platform }}") {
+            "windows-latest" {
+              $platformKey = "windows-x86_64"
+              $filter = "*.exe"
+              $urlSuffix = ".exe"
+            }
+            "ubuntu-latest" {
+              $platformKey = "linux-x86_64"
+              $filter = "*.AppImage"
+              $urlSuffix = ".AppImage"
+            }
+            default {
+              $urlSuffix = ".tar.gz"
+              $filter = "*.app.tar.gz"
+              if ("${{ matrix.rust_target }}" -eq "aarch64-apple-darwin") {
+                $platformKey = "darwin-aarch64"
+              } else {
+                $platformKey = "darwin-x86_64"
+              }
+            }
+          }
+
+          $artifact = Get-ChildItem -Path $bundleRoot -Recurse -Filter $filter |
+            Select-Object -First 1
+          if ($null -eq $artifact) { throw "$filter not found in $bundleRoot" }
+
+          $sigPath = "$($artifact.FullName).sig"
+          if (!(Test-Path $sigPath)) { throw "Signature file not found: $sigPath" }
+          $signature = Get-Content $sigPath -Raw
+
+          $tag = $env:GITHUB_REF_NAME
+          $renamedAsset = "DeviceDeck-$tag-${{ matrix.artifact_name }}$urlSuffix"
+
+          $version = $tag.TrimStart("v")
+          $manifest = @{
+            version = $version
+            notes = "See GitHub release notes."
+            pub_date = (Get-Date).ToUniversalTime().ToString("o")
+            platforms = @{
+              $platformKey = @{
+                signature = $signature.Trim()
+                url = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$tag/$renamedAsset"
+              }
+            }
+          } | ConvertTo-Json -Depth 5
+          Set-Content -Path (Join-Path $bundleRoot "latest-${{ matrix.artifact_name }}.json") -Value $manifest
+
+      - name: Prepare release assets
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $tag = "${{ github.ref_name }}"
+          $platform = "${{ matrix.artifact_name }}"
+          $target = "${{ matrix.rust_target }}"
+
+          if ([string]::IsNullOrWhiteSpace($target)) {
+            $bundleRoot = Join-Path $PWD "src-tauri/target/release/bundle"
+          } else {
+            $bundleRoot = Join-Path $PWD "src-tauri/target/$target/release/bundle"
+          }
+
+          if (!(Test-Path $bundleRoot)) {
+            throw "Bundle directory not found: $bundleRoot"
+          }
+
+          $outDir = Join-Path $PWD "release-assets"
+          New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+
+          $suffixes = @(
+            ".tar.gz.sig", ".tar.gz", ".AppImage.sig", ".AppImage",
+            ".msi.sig", ".msi", ".exe.sig", ".exe",
+            ".dmg.sig", ".dmg", ".deb.sig", ".deb",
+            ".rpm.sig", ".rpm", ".zip.sig", ".zip"
+          )
+
+          $assets = Get-ChildItem -Path $bundleRoot -Recurse -File | Where-Object {
+            $name = $_.Name
+            $suffixes | Where-Object { $name.EndsWith($_, [System.StringComparison]::OrdinalIgnoreCase) }
+          }
+
+          if (!$assets) {
+            throw "No bundle assets found in $bundleRoot"
+          }
+
+          foreach ($asset in $assets) {
+            $suffix = $suffixes | Where-Object {
+              $asset.Name.EndsWith($_, [System.StringComparison]::OrdinalIgnoreCase)
+            } | Select-Object -First 1
+
+            $destination = Join-Path $outDir "DeviceDeck-$tag-$platform$suffix"
+            Copy-Item -LiteralPath $asset.FullName -Destination $destination -Force
+          }
+
+          $manifestFile = Join-Path $bundleRoot "latest-$platform.json"
+          if (Test-Path $manifestFile) {
+            Copy-Item -LiteralPath $manifestFile -Destination (Join-Path $outDir "latest-$platform.json") -Force
+          }
+
+          Get-ChildItem -Path $outDir -File | ForEach-Object {
+            Write-Host "Prepared release asset: $($_.Name)"
+          }
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeviceDeck-${{ github.ref_name }}-${{ matrix.artifact_name }}
+          path: release-assets/*
+          if-no-files-found: error
+
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload ${{ github.ref_name }} release-assets/* --clobber
+
+  merge-updater-manifest:
+    needs:
+      - create-release
+      - build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-artifacts
+          merge-multiple: true
+
+      - name: Merge per-platform manifests into latest.json
+        shell: pwsh
+        run: |
+          $manifestFiles = Get-ChildItem -Path "all-artifacts" -Recurse -Filter "latest-*.json"
+          if ($manifestFiles.Count -eq 0) { throw "No latest-*.json manifests found" }
+
+          $merged = $null
+          foreach ($file in $manifestFiles) {
+            $partial = Get-Content $file.FullName -Raw | ConvertFrom-Json
+            if ($null -eq $merged) {
+              $merged = $partial
+            } else {
+              foreach ($prop in $partial.platforms.PSObject.Properties) {
+                $merged.platforms | Add-Member -MemberType NoteProperty -Name $prop.Name -Value $prop.Value -Force
+              }
+            }
+          }
+
+          $mergedJson = $merged | ConvertTo-Json -Depth 5
+          Set-Content -Path "latest.json" -Value $mergedJson
+          Write-Host "Merged manifest:`n$mergedJson"
+
+      - name: Upload merged manifest to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload ${{ github.ref_name }} latest.json --clobber --repo ${{ github.repository }}
+
+  publish-release:
+    needs:
+      - create-release
+      - build
+      - merge-updater-manifest
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Publish release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: Number("${{ needs.create-release.outputs.release_id }}"),
+              draft: false
+            });

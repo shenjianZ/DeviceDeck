@@ -194,6 +194,14 @@ pub struct AppSettings {
     pub auto_scan_devices: bool,
     #[serde(default = "default_device_scan_interval_seconds")]
     pub device_scan_interval_seconds: u32,
+    #[serde(default = "default_font_size")]
+    pub font_size: u32,
+    #[serde(default = "default_locale")]
+    pub locale: String,
+    #[serde(default)]
+    pub auto_start: bool,
+    #[serde(default = "default_auto_update_enabled")]
+    pub auto_update_enabled: bool,
 }
 
 impl Default for AppSettings {
@@ -209,6 +217,10 @@ impl Default for AppSettings {
             log_retention_days: 7,
             auto_scan_devices: default_auto_scan_devices(),
             device_scan_interval_seconds: default_device_scan_interval_seconds(),
+            font_size: default_font_size(),
+            locale: default_locale(),
+            auto_start: false,
+            auto_update_enabled: default_auto_update_enabled(),
         }
     }
 }
@@ -219,6 +231,18 @@ fn default_auto_scan_devices() -> bool {
 
 fn default_device_scan_interval_seconds() -> u32 {
     30
+}
+
+fn default_font_size() -> u32 {
+    14
+}
+
+fn default_locale() -> String {
+    "zh-CN".into()
+}
+
+fn default_auto_update_enabled() -> bool {
+    true
 }
 
 #[cfg(test)]

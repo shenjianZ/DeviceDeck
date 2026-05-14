@@ -1,0 +1,16 @@
+{
+  "title": "日志",
+  "refresh": "刷新",
+  "clear": "清空",
+  "source": "来源",
+  "level": "级别",
+  "allSource": "全部来源",
+  "allLevel": "全部级别",
+  "system": "系统",
+  "device": "设备",
+  "message": "消息",
+  "time": "时间",
+  "noLogs": "暂无日志记录",
+  "loading": "加载中...",
+  "detailTitle": "日志详情"
+}

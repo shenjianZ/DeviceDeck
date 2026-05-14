@@ -10,6 +10,15 @@ import type {
   WirelessAdbService,
 } from "../types";
 
+/** 分页查询结果 */
+export interface PaginatedLogs {
+  logs: AppLog[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
 export const tauriApi = {
   // Environment
   checkEnvironment: () => invoke<EnvironmentStatus>("check_environment"),
@@ -44,6 +53,13 @@ export const tauriApi = {
   // Logs
   getRecentLogs: (limit = 500) =>
     invoke<AppLog[]>("get_recent_logs", { limit }),
+  getLogsPaginated: (page = 1, pageSize = 50, sourceFilter?: string, levelFilter?: string) =>
+    invoke<PaginatedLogs>("get_logs_paginated", {
+      page,
+      pageSize,
+      sourceFilter: sourceFilter === "all" ? undefined : sourceFilter,
+      levelFilter: levelFilter === "all" ? undefined : levelFilter,
+    }),
   clearLogs: () =>
     invoke<void>("clear_logs"),
 
@@ -52,6 +68,13 @@ export const tauriApi = {
   updateSettings: (settings: AppSettings) =>
     invoke<void>("update_settings", { settings }),
   resetSettings: () => invoke<AppSettings>("reset_settings"),
+
+  // Autostart
+  setAutostart: (enabled: boolean) =>
+    enabled
+      ? invoke("plugin:autostart|enable")
+      : invoke("plugin:autostart|disable"),
+  getAutostart: () => invoke<boolean>("plugin:autostart|is_enabled"),
 
   // Events
   onLog: (handler: (log: AppLog) => void) =>

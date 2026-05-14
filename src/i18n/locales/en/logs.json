@@ -1,0 +1,16 @@
+{
+  "title": "Logs",
+  "refresh": "Refresh",
+  "clear": "Clear",
+  "source": "Source",
+  "level": "Level",
+  "allSource": "All Sources",
+  "allLevel": "All Levels",
+  "system": "System",
+  "device": "Device",
+  "message": "Message",
+  "time": "Time",
+  "noLogs": "No log records",
+  "loading": "Loading...",
+  "detailTitle": "Log Details"
+}

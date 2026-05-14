@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { tauriApi } from "../lib/tauri";
+import { useNotificationStore } from "./notificationStore";
 import type { DeviceInfo, EnvironmentStatus, AppError, WirelessAdbService } from "../types";
 
 interface DeviceStore {
@@ -14,8 +15,8 @@ interface DeviceStore {
   wirelessMessage: string | null;
 
   checkEnvironment: () => Promise<void>;
-  scanDevices: () => Promise<void>;
-  discoverWirelessDevices: () => Promise<void>;
+  scanDevices: (silent?: boolean) => Promise<void>;
+  discoverWirelessDevices: (silent?: boolean) => Promise<void>;
   selectDevice: (id: string | null) => void;
   refreshDeviceDetail: (serial: string) => Promise<void>;
   enableWirelessDevice: (serial: string, port?: number) => Promise<DeviceInfo | null>;
@@ -45,23 +46,33 @@ export const useDeviceStore = create<DeviceStore>((set) => ({
     }
   },
 
-  scanDevices: async () => {
+  scanDevices: async (silent = false) => {
     set({ isScanning: true, error: null });
     try {
       const devices = await tauriApi.scanDevices();
       set({ devices, isScanning: false });
+      if (!silent) {
+        useNotificationStore.getState().showSuccess("设备扫描完成", `发现 ${devices.length} 个设备`);
+      }
     } catch (e: unknown) {
-      set({ error: e as AppError, isScanning: false });
+      const err = e as AppError;
+      set({ error: err, isScanning: false });
+      useNotificationStore.getState().showError("设备扫描失败", err.message, err.suggestion);
     }
   },
 
-  discoverWirelessDevices: async () => {
+  discoverWirelessDevices: async (silent = false) => {
     set({ isDiscoveringWireless: true, error: null });
     try {
       const wirelessServices = await tauriApi.discoverWirelessDevices();
       set({ wirelessServices, isDiscoveringWireless: false });
+      if (!silent) {
+        useNotificationStore.getState().showSuccess("无线设备扫描完成", `发现 ${wirelessServices.length} 个服务`);
+      }
     } catch (e: unknown) {
-      set({ error: e as AppError, isDiscoveringWireless: false });
+      const err = e as AppError;
+      set({ error: err, isDiscoveringWireless: false });
+      useNotificationStore.getState().showError("无线设备扫描失败", err.message, err.suggestion);
     }
   },
 
@@ -90,9 +101,12 @@ export const useDeviceStore = create<DeviceStore>((set) => ({
         isWirelessBusy: false,
         wirelessMessage: `已连接无线设备 ${device.serial}`,
       }));
+      useNotificationStore.getState().showSuccess("无线设备已启用", `${device.serial}:${port}`);
       return device;
     } catch (e: unknown) {
-      set({ error: e as AppError, isWirelessBusy: false });
+      const err = e as AppError;
+      set({ error: err, isWirelessBusy: false });
+      useNotificationStore.getState().showError("启用无线设备失败", err.message, err.suggestion);
       return null;
     }
   },
@@ -107,9 +121,12 @@ export const useDeviceStore = create<DeviceStore>((set) => ({
         isWirelessBusy: false,
         wirelessMessage: `已连接无线设备 ${device.serial}`,
       }));
+      useNotificationStore.getState().showSuccess("无线设备已连接", `${host}:${port}`);
       return device;
     } catch (e: unknown) {
-      set({ error: e as AppError, isWirelessBusy: false });
+      const err = e as AppError;
+      set({ error: err, isWirelessBusy: false });
+      useNotificationStore.getState().showError("连接无线设备失败", err.message, err.suggestion);
       return null;
     }
   },
@@ -119,9 +136,12 @@ export const useDeviceStore = create<DeviceStore>((set) => ({
     try {
       const message = await tauriApi.pairWirelessDevice(host, port, pairingCode);
       set({ isWirelessBusy: false, wirelessMessage: message || "无线调试配对成功" });
+      useNotificationStore.getState().showSuccess("配对成功", `${host}:${port}`);
       return true;
     } catch (e: unknown) {
-      set({ error: e as AppError, isWirelessBusy: false });
+      const err = e as AppError;
+      set({ error: err, isWirelessBusy: false });
+      useNotificationStore.getState().showError("配对失败", err.message, err.suggestion);
       return false;
     }
   },
@@ -136,9 +156,12 @@ export const useDeviceStore = create<DeviceStore>((set) => ({
         isWirelessBusy: false,
         wirelessMessage: `已断开 ${serial}`,
       }));
+      useNotificationStore.getState().showSuccess("设备已断开", serial);
       return true;
     } catch (e: unknown) {
-      set({ error: e as AppError, isWirelessBusy: false });
+      const err = e as AppError;
+      set({ error: err, isWirelessBusy: false });
+      useNotificationStore.getState().showError("断开设备失败", err.message, err.suggestion);
       return false;
     }
   },

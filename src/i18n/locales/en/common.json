@@ -1,0 +1,49 @@
+{
+  "buttons": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "reset": "Reset",
+    "close": "Close",
+    "loading": "Loading...",
+    "scan": "Scan Devices",
+    "scanning": "Scanning...",
+    "refresh": "Refresh",
+    "clear": "Clear",
+    "stop": "Stop",
+    "stopping": "Stopping..."
+  },
+  "toast": {
+    "saveSuccess": "Settings saved",
+    "saveFailed": "Failed to save settings",
+    "resetSuccess": "Settings reset to defaults",
+    "resetFailed": "Failed to reset settings"
+  },
+  "status": {
+    "online": "Online",
+    "offline": "Offline",
+    "available": "Available",
+    "unavailable": "Unavailable",
+    "unauthorized": "Unauthorized",
+    "busy": "Busy",
+    "unknown": "Unknown",
+    "running": "Running",
+    "normal": "Normal"
+  },
+  "empty": {
+    "noData": "No data yet, click \"Scan Devices\" to start",
+    "loading": "Loading..."
+  },
+  "capabilities": {
+    "mirror": "Mirror",
+    "control": "Control",
+    "screenshot": "Screenshot",
+    "recording": "Recording",
+    "wireless": "Wireless",
+    "installApp": "Install",
+    "uninstallApp": "Uninstall",
+    "logs": "Logs",
+    "fileTransfer": "File Transfer",
+    "automation": "Automation"
+  }
+}

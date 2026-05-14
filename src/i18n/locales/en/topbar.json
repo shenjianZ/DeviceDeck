@@ -1,0 +1,10 @@
+{
+  "pin": "Pin",
+  "unpin": "Unpin",
+  "minimize": "Minimize",
+  "maximize": "Maximize",
+  "restore": "Restore",
+  "switchLight": "Switch to light",
+  "switchDark": "Switch to dark",
+  "close": "Close"
+}

@@ -1,39 +1,51 @@
-import { Trash2, FileText } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Trash2, FileText, RefreshCw } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useLogStore } from "../stores/logStore";
 import { Dropdown } from "../components/ui/Dropdown";
 import { Badge } from "../components/ui/Badge";
-import { SOURCE_NAMES } from "../lib/presets";
-
-const SOURCE_FILTER_OPTIONS = [
-  { value: "all", label: "全部来源" },
-  { value: "system", label: "系统" },
-  { value: "adb", label: "ADB" },
-  { value: "scrcpy", label: "Scrcpy" },
-];
-
-const LEVEL_FILTER_OPTIONS = [
-  { value: "all", label: "全部级别" },
-  { value: "info", label: "Info" },
-  { value: "warn", label: "Warn" },
-  { value: "error", label: "Error" },
-];
+import { Pagination } from "../components/ui/Pagination";
+import { getSourceNames } from "../lib/presets";
 
 export function LogsPage() {
+  const { t } = useTranslation(["logs", "common"]);
   const logs = useLogStore((s) => s.logs);
+  const total = useLogStore((s) => s.total);
+  const page = useLogStore((s) => s.page);
+  const pageSize = useLogStore((s) => s.pageSize);
+  const totalPages = useLogStore((s) => s.totalPages);
+  const isLoading = useLogStore((s) => s.isLoading);
   const sourceFilter = useLogStore((s) => s.sourceFilter);
   const levelFilter = useLogStore((s) => s.levelFilter);
   const setFilter = useLogStore((s) => s.setFilter);
   const clearLogs = useLogStore((s) => s.clearLogs);
+  const loadPaginatedLogs = useLogStore((s) => s.loadPaginatedLogs);
+  const startListening = useLogStore((s) => s.startListening);
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
 
-  const uniqueLogs = logs.filter(
-    (log, index, list) => list.findIndex((item) => item.id === log.id) === index
-  );
+  const sourceNames = getSourceNames(t);
 
-  const filteredLogs = uniqueLogs.filter((log) => {
-    if (sourceFilter !== "all" && log.source !== sourceFilter) return false;
-    if (levelFilter !== "all" && log.level !== levelFilter) return false;
-    return true;
-  });
+  const sourceFilterOptions = [
+    { value: "all", label: t("logs:allSource") },
+    { value: "system", label: t("logs:system") },
+    { value: "adb", label: "ADB" },
+    { value: "scrcpy", label: "Scrcpy" },
+  ];
+
+  const levelFilterOptions = [
+    { value: "all", label: t("logs:allLevel") },
+    { value: "info", label: "Info" },
+    { value: "warn", label: "Warn" },
+    { value: "error", label: "Error" },
+  ];
+
+  useEffect(() => {
+    loadPaginatedLogs(1);
+    const cleanup = startListening();
+    return () => {
+      cleanup.then((fn) => fn());
+    };
+  }, [loadPaginatedLogs, startListening]);
 
   const levelBadgeVariant = (level: string): "info" | "warn" | "error" => {
     if (level === "warn") return "warn";
@@ -53,66 +65,147 @@ export function LogsPage() {
     return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
   };
 
+  const toggleLogDetail = (id: string) => {
+    setExpandedLogId((current) => (current === id ? null : id));
+  };
+
   return (
-    <div>
+    <div className="logs-page">
       <div className="action-bar">
         <Dropdown
           value={sourceFilter}
           onChange={(v) => setFilter(v, undefined)}
-          options={SOURCE_FILTER_OPTIONS}
-          className=""
+          options={sourceFilterOptions}
         />
         <Dropdown
           value={levelFilter}
           onChange={(v) => setFilter(undefined, v)}
-          options={LEVEL_FILTER_OPTIONS}
-          className=""
+          options={levelFilterOptions}
         />
         <div style={{ flex: 1 }} />
-        <span style={{ color: "var(--t2)", fontSize: 12 }}>
-          {filteredLogs.length} 条记录
-        </span>
-        <button className="btn btn-d" onClick={() => void clearLogs()} disabled={uniqueLogs.length === 0} type="button">
+        <button
+          className="btn btn-s"
+          onClick={() => loadPaginatedLogs(page)}
+          disabled={isLoading}
+          type="button"
+        >
+          <RefreshCw size={14} className={isLoading ? "spin" : ""} />
+          {t("logs:refresh")}
+        </button>
+        <button
+          className="btn btn-d"
+          onClick={() => void clearLogs()}
+          disabled={logs.length === 0}
+          type="button"
+        >
           <Trash2 size={14} />
-          清空
+          {t("logs:clear")}
         </button>
       </div>
 
-      {filteredLogs.length === 0 ? (
+      {logs.length === 0 ? (
         <div className="empty">
           <FileText size={32} />
-          <span>{uniqueLogs.length === 0 ? "暂无日志记录" : "没有匹配的日志"}</span>
+          <span>{total === 0 ? t("logs:noLogs") : t("common:empty.loading")}</span>
         </div>
       ) : (
-        <div className="log-table">
-          <div className="log-row log-head">
-            <span>时间</span>
-            <span>来源</span>
-            <span>级别</span>
-            <span>设备</span>
-            <span>消息</span>
+        <div className="logs-content">
+          <div className="log-table">
+            <div className="log-row log-head">
+              <span>{t("logs:time")}</span>
+              <span>{t("logs:source")}</span>
+              <span>{t("logs:level")}</span>
+              <span>{t("logs:device")}</span>
+              <span>{t("logs:message")}</span>
+            </div>
+            <div
+              className="log-table-body"
+            >
+              {logs.map((log) => {
+                const sourceName = sourceNames[log.source] ?? log.source;
+                const time = formatTime(log.time);
+                const expanded = expandedLogId === log.id;
+
+                return (
+                <div key={log.id} className="log-item">
+                  <div
+                    className="log-row log-row-action"
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={expanded}
+                    aria-label={`${time} ${sourceName} ${log.level.toUpperCase()} ${log.deviceSerial || ""} ${log.message}`}
+                    onClick={() => toggleLogDetail(log.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        toggleLogDetail(log.id);
+                      }
+                    }}
+                  >
+                  <span className="mono">{time}</span>
+                  <Badge variant={sourceBadgeVariant(log.source)}>
+                    {sourceName}
+                  </Badge>
+                  <Badge variant={levelBadgeVariant(log.level)}>
+                    {log.level.toUpperCase()}
+                  </Badge>
+                  <span
+                    className="mono"
+                    style={{
+                      fontSize: 11,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {log.deviceSerial || "—"}
+                  </span>
+                  <span
+                    style={{
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {log.message}
+                  </span>
+                  </div>
+                  {expanded && (
+                    <div className="log-detail" data-testid={`log-detail-${log.id}`}>
+                      <div className="log-detail-title">{t("logs:detailTitle")}</div>
+                      <div className="log-detail-meta">
+                        <span>{time}</span>
+                        <span>{sourceName}</span>
+                        <span>{log.level.toUpperCase()}</span>
+                        <span className="mono">{log.deviceSerial || "-"}</span>
+                      </div>
+                      <div className="log-detail-message">{log.message}</div>
+                    </div>
+                  )}
+                </div>
+                );
+              })}
+            </div>
           </div>
-          <div style={{ maxHeight: "calc(100vh - 200px)", overflowY: "auto" }}>
-            {filteredLogs.map((log, index) => (
-              <div key={`${log.id}-${index}`} className="log-row">
-                <span className="mono">{formatTime(log.time)}</span>
-                <Badge variant={sourceBadgeVariant(log.source)}>
-                  {SOURCE_NAMES[log.source] ?? log.source}
-                </Badge>
-                <Badge variant={levelBadgeVariant(log.level)}>
-                  {log.level.toUpperCase()}
-                </Badge>
-                <span className="mono" style={{ fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {log.deviceSerial || "—"}
-                </span>
-                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {log.message}
-                </span>
-              </div>
-            ))}
-          </div>
+
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            pageSize={pageSize}
+            isLoading={isLoading}
+            onPageChange={(targetPage) => loadPaginatedLogs(targetPage)}
+          />
         </div>
       )}
+
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        .spin { animation: spin 1s linear infinite; }
+      `}</style>
     </div>
   );
 }

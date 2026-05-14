@@ -21,12 +21,25 @@ use services::environment::EnvironmentService;
 use services::mirror::MirrorService;
 use services::settings::SettingsService;
 
+const AUTOSTART_HIDDEN_ARG: &str = "--devicedeck-start-hidden";
+
+fn is_hidden_autostart_launch() -> bool {
+    std::env::args().any(|arg| arg == AUTOSTART_HIDDEN_ARG)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let start_hidden = is_hidden_autostart_launch();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
-        .setup(|app| {
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec![AUTOSTART_HIDDEN_ARG]),
+        ))
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .setup(move |app| {
             let data_dir = app.path().app_data_dir().expect("无法获取 app data 目录");
 
             let db = Arc::new(Database::open(&data_dir).expect("无法初始化数据库"));
@@ -58,6 +71,12 @@ pub fn run() {
             app.manage(mirror_service);
             app.manage(settings_service);
 
+            if start_hidden {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.hide();
+                }
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -75,6 +94,7 @@ pub fn run() {
             commands::mirror::stop_mirror,
             commands::mirror::list_mirror_sessions,
             commands::log::get_recent_logs,
+            commands::log::get_logs_paginated,
             commands::log::clear_logs,
             commands::settings::get_settings,
             commands::settings::update_settings,

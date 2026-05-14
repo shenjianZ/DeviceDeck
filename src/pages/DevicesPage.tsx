@@ -1,22 +1,27 @@
 import { RefreshCw, Smartphone, Wifi, Usb, ChevronRight, X as XIcon } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useDeviceStore } from "../stores/deviceStore";
 import { useMirrorStore } from "../stores/mirrorStore";
 import { usePageStore } from "../stores/pageStore";
 import { Badge } from "../components/ui/Badge";
-import { STATUS_NAMES, CONN_NAMES, CAP_NAMES } from "../lib/presets";
+import { getStatusNames, getConnNames, getCapNames } from "../lib/presets";
 import type { DeviceInfo } from "../types";
 
 export function DevicesPage() {
+  const { t } = useTranslation(["devices", "common"]);
   const devices = useDeviceStore((s) => s.devices);
   const selectedDeviceId = useDeviceStore((s) => s.selectedDeviceId);
   const isScanning = useDeviceStore((s) => s.isScanning);
   const scanDevices = useDeviceStore((s) => s.scanDevices);
   const selectDevice = useDeviceStore((s) => s.selectDevice);
   const isWirelessBusy = useDeviceStore((s) => s.isWirelessBusy);
-  const wirelessMessage = useDeviceStore((s) => s.wirelessMessage);
   const startWirelessMirror = useMirrorStore((s) => s.startWirelessMirror);
   const isStartingMirror = useMirrorStore((s) => s.isStarting);
   const setPage = usePageStore((s) => s.setPage);
+
+  const statusNames = getStatusNames(t);
+  const connNames = getConnNames(t);
+  const capNames = getCapNames(t);
 
   const selectedDevice = devices.find((d) => d.id === selectedDeviceId) ?? null;
 
@@ -44,25 +49,19 @@ export function DevicesPage() {
   return (
     <div>
       <div className="action-bar">
-        <button className="btn btn-p" onClick={scanDevices} disabled={isScanning} type="button">
+        <button className="btn btn-p" onClick={() => scanDevices()} disabled={isScanning} type="button">
           <RefreshCw size={14} className={isScanning ? "spin" : ""} />
-          {isScanning ? "扫描中..." : "扫描设备"}
+          {isScanning ? t("common:buttons.scanning") : t("common:buttons.scan")}
         </button>
         <span style={{ color: "var(--t2)", fontSize: 12 }}>
-          共 {devices.length} 台设备
+          {t("devices:deviceCount", { count: devices.length })}
         </span>
       </div>
-
-      {wirelessMessage && (
-        <div className="detail-notice" style={{ background: "var(--ok-s)", color: "var(--ok)", marginBottom: 12 }}>
-          {wirelessMessage}
-        </div>
-      )}
 
       {devices.length === 0 ? (
         <div className="empty">
           <Smartphone size={32} />
-          <span>未检测到设备，请连接设备后点击“扫描设备”。</span>
+          <span>{t("devices:noDevices")}</span>
         </div>
       ) : (
         <div style={{ display: "flex", gap: 16 }}>
@@ -81,7 +80,7 @@ export function DevicesPage() {
                       {device.name || device.model || device.serial}
                     </span>
                     <Badge variant={statusBadgeVariant(device.status)}>
-                      {STATUS_NAMES[device.status] ?? device.status}
+                      {statusNames[device.status] ?? device.status}
                     </Badge>
                   </div>
                   <div style={{ color: "var(--t2)", fontSize: 11, marginBottom: 6 }} className="mono">
@@ -90,7 +89,7 @@ export function DevicesPage() {
                   <div className="row" style={{ flexWrap: "wrap", gap: 3 }}>
                     {device.capabilities.slice(0, 4).map((cap) => (
                       <span key={cap} className="cap-tag">
-                        {CAP_NAMES[cap] ?? cap}
+                        {capNames[cap] ?? cap}
                       </span>
                     ))}
                     {device.capabilities.length > 4 && (
@@ -121,33 +120,33 @@ export function DevicesPage() {
                 </div>
 
                 <Badge variant={statusBadgeVariant(selectedDevice.status)}>
-                  {STATUS_NAMES[selectedDevice.status] ?? selectedDevice.status}
+                  {statusNames[selectedDevice.status] ?? selectedDevice.status}
                 </Badge>
 
                 <div className="detail-grid" style={{ marginBottom: 12 }}>
-                  <span className="detail-label">型号</span>
+                  <span className="detail-label">{t("devices:model")}</span>
                   <span className="detail-val">{selectedDevice.model}</span>
-                  <span className="detail-label">品牌</span>
+                  <span className="detail-label">{t("devices:brand")}</span>
                   <span className="detail-val">{selectedDevice.brand}</span>
-                  <span className="detail-label">序列号</span>
+                  <span className="detail-label">{t("devices:serial")}</span>
                   <span className="detail-val mono" style={{ fontSize: 11 }}>{selectedDevice.serial}</span>
-                  <span className="detail-label">连接</span>
-                  <span className="detail-val">{CONN_NAMES[selectedDevice.connectionType] ?? selectedDevice.connectionType}</span>
+                  <span className="detail-label">{t("devices:connection")}</span>
+                  <span className="detail-val">{connNames[selectedDevice.connectionType] ?? selectedDevice.connectionType}</span>
                   {selectedDevice.androidVersion && (
                     <>
-                      <span className="detail-label">Android</span>
+                      <span className="detail-label">{t("devices:android")}</span>
                       <span className="detail-val">{selectedDevice.androidVersion}</span>
                     </>
                   )}
                   {selectedDevice.screenSize && (
                     <>
-                      <span className="detail-label">屏幕</span>
+                      <span className="detail-label">{t("devices:screen")}</span>
                       <span className="detail-val">{selectedDevice.screenSize}</span>
                     </>
                   )}
                   {selectedDevice.batteryLevel != null && (
                     <>
-                      <span className="detail-label">电量</span>
+                      <span className="detail-label">{t("devices:battery")}</span>
                       <span className="detail-val">{selectedDevice.batteryLevel}%</span>
                     </>
                   )}
@@ -155,12 +154,12 @@ export function DevicesPage() {
 
                 <div style={{ marginBottom: 12 }}>
                   <div style={{ color: "var(--t2)", fontSize: 11, fontWeight: 600, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                    能力
+                    {t("devices:capabilities")}
                   </div>
                   <div className="row" style={{ flexWrap: "wrap", gap: 3 }}>
                     {selectedDevice.capabilities.map((cap) => (
                       <span key={cap} className="cap-tag">
-                        {CAP_NAMES[cap] ?? cap}
+                        {capNames[cap] ?? cap}
                       </span>
                     ))}
                   </div>
@@ -173,7 +172,7 @@ export function DevicesPage() {
                   disabled={selectedDevice.status !== "online"}
                   type="button"
                 >
-                  进入投屏
+                  {t("devices:enterMirror")}
                 </button>
 
                 {selectedDevice.connectionType === "usb" && (
@@ -184,13 +183,13 @@ export function DevicesPage() {
                     disabled={selectedDevice.status !== "online" || isWirelessBusy || isStartingMirror}
                     type="button"
                   >
-                    USB 切 WiFi 并投屏
+                    {t("devices:usbToWifiMirror")}
                   </button>
                 )}
 
                 {selectedDevice.status !== "online" && (
                   <div className="detail-notice" style={{ background: "var(--wrn-s)", color: "var(--wrn)" }}>
-                    设备不在线，无法投屏
+                    {t("devices:deviceOffline")}
                   </div>
                 )}
               </div>

@@ -1,0 +1,93 @@
+{
+  "menu": {
+    "appearance": "外观",
+    "tools": "工具",
+    "mirror": "投屏",
+    "logs": "日志",
+    "about": "关于"
+  },
+  "appearance": {
+    "theme": "主题",
+    "light": "亮色",
+    "dark": "暗色",
+    "language": "语言",
+    "fontSize": "字号",
+    "autostart": "开机自动启动",
+    "autostartDesc": "系统启动时自动运行 DeviceDeck"
+  },
+  "tools": {
+    "title": "工具环境",
+    "adb": "ADB",
+    "scrcpy": "Scrcpy",
+    "useBundledAdb": "使用内置 ADB",
+    "useBundledAdbDesc": "使用应用内置的 ADB 工具",
+    "useBundledScrcpy": "使用内置 Scrcpy",
+    "useBundledScrcpyDesc": "使用应用内置的 Scrcpy 工具",
+    "customAdbPath": "自定义 ADB 路径",
+    "customScrcpyPath": "自定义 Scrcpy 路径",
+    "autoScan": "启动并定时扫描设备",
+    "autoScanDesc": "自动刷新 USB 设备和 Android 11+ WiFi 无线调试设备",
+    "scanInterval": "扫描间隔",
+    "scanIntervalDesc": "范围 5-600 秒，间隔越短刷新越及时"
+  },
+  "mirror": {
+    "title": "默认投屏配置",
+    "resolution": "分辨率",
+    "bitrate": "码率",
+    "fps": "帧率",
+    "codec": "编码",
+    "noControl": "只读模式",
+    "noControlDesc": "默认禁用控制",
+    "stayAwake": "保持唤醒",
+    "stayAwakeDesc": "默认保持唤醒",
+    "turnScreenOff": "关闭屏幕",
+    "turnScreenOffDesc": "默认关闭设备屏幕"
+  },
+  "logs": {
+    "title": "日志",
+    "retention": "日志保留天数",
+    "retentionDesc": "超过保留期的日志将自动清理"
+  },
+  "about": {
+    "description": "Android 设备投屏管理工具",
+    "author": "作者: shenjianZ",
+    "techStack": "技术栈: Tauri 2 + React 19 + Rust",
+    "github": "GitHub",
+    "feedback": "反馈问题",
+    "updateSection": "软件更新",
+    "autoUpdateEnabled": "自动检查更新",
+    "autoUpdateEnabledDesc": "启动时自动检查是否有新版本",
+    "currentVersion": "当前版本",
+    "updateCheck": "检查更新",
+    "updateDownload": "下载更新",
+    "updateInstall": "安装并重启",
+    "updateStatusIdle": "点击按钮检查更新",
+    "updateStatusChecking": "正在检查更新...",
+    "updateStatusAvailable": "发现新版本",
+    "updateStatusDownloading": "正在下载更新...",
+    "updateStatusDownloaded": "更新已下载，可以安装",
+    "updateStatusUpToDate": "已是最新版本",
+    "updateStatusError": "检查更新失败",
+    "updateDownloaded": "更新下载完成",
+    "updateDownloadFailed": "下载更新失败",
+    "updateInstallFailed": "安装更新失败",
+    "updateNoUpdate": "没有可用的更新",
+    "updateReadyToInstall": "更新已准备就绪，点击安装按钮重启应用",
+    "updateErrorNetwork": "网络连接失败，请检查网络设置",
+    "updateErrorUnreachable": "无法连接到更新服务器",
+    "updateErrorNoRelease": "未找到发布版本",
+    "updateErrorSignature": "更新签名校验失败",
+    "updateErrorUnknown": "未知错误"
+  },
+  "localeOptions": {
+    "zh-CN": "简体中文",
+    "en": "English"
+  },
+  "fontSizeOptions": {
+    "12": "12 px",
+    "13": "13 px",
+    "14": "14 px",
+    "15": "15 px",
+    "16": "16 px"
+  }
+}

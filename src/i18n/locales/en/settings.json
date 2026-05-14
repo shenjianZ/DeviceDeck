@@ -1,0 +1,93 @@
+{
+  "menu": {
+    "appearance": "Appearance",
+    "tools": "Tools",
+    "mirror": "Mirror",
+    "logs": "Logs",
+    "about": "About"
+  },
+  "appearance": {
+    "theme": "Theme",
+    "light": "Light",
+    "dark": "Dark",
+    "language": "Language",
+    "fontSize": "Font Size",
+    "autostart": "Auto Start on Boot",
+    "autostartDesc": "Launch DeviceDeck when system starts"
+  },
+  "tools": {
+    "title": "Tool Environment",
+    "adb": "ADB",
+    "scrcpy": "Scrcpy",
+    "useBundledAdb": "Use Bundled ADB",
+    "useBundledAdbDesc": "Use the built-in ADB tool",
+    "useBundledScrcpy": "Use Bundled Scrcpy",
+    "useBundledScrcpyDesc": "Use the built-in Scrcpy tool",
+    "customAdbPath": "Custom ADB Path",
+    "customScrcpyPath": "Custom Scrcpy Path",
+    "autoScan": "Auto Scan Devices",
+    "autoScanDesc": "Auto-refresh USB and Android 11+ WiFi wireless debug devices",
+    "scanInterval": "Scan Interval",
+    "scanIntervalDesc": "Range 5-600 seconds, shorter = more responsive"
+  },
+  "mirror": {
+    "title": "Default Mirror Config",
+    "resolution": "Resolution",
+    "bitrate": "Bitrate",
+    "fps": "FPS",
+    "codec": "Codec",
+    "noControl": "Read-only Mode",
+    "noControlDesc": "Disable control by default",
+    "stayAwake": "Stay Awake",
+    "stayAwakeDesc": "Keep device awake by default",
+    "turnScreenOff": "Turn Screen Off",
+    "turnScreenOffDesc": "Turn off device screen by default"
+  },
+  "logs": {
+    "title": "Logs",
+    "retention": "Log Retention Days",
+    "retentionDesc": "Logs older than this will be auto-cleaned"
+  },
+  "about": {
+    "description": "Android device mirroring and management tool",
+    "author": "Author: shenjianZ",
+    "techStack": "Tech Stack: Tauri 2 + React 19 + Rust",
+    "github": "GitHub",
+    "feedback": "Report Issue",
+    "updateSection": "Software Update",
+    "autoUpdateEnabled": "Auto Check Updates",
+    "autoUpdateEnabledDesc": "Check for new versions on startup",
+    "currentVersion": "Current Version",
+    "updateCheck": "Check for Updates",
+    "updateDownload": "Download Update",
+    "updateInstall": "Install & Restart",
+    "updateStatusIdle": "Click button to check for updates",
+    "updateStatusChecking": "Checking for updates...",
+    "updateStatusAvailable": "New version available",
+    "updateStatusDownloading": "Downloading update...",
+    "updateStatusDownloaded": "Update downloaded, ready to install",
+    "updateStatusUpToDate": "Already up to date",
+    "updateStatusError": "Failed to check for updates",
+    "updateDownloaded": "Update downloaded successfully",
+    "updateDownloadFailed": "Failed to download update",
+    "updateInstallFailed": "Failed to install update",
+    "updateNoUpdate": "No update available",
+    "updateReadyToInstall": "Update is ready, click install to restart",
+    "updateErrorNetwork": "Network connection failed, check your network settings",
+    "updateErrorUnreachable": "Cannot reach update server",
+    "updateErrorNoRelease": "No release found",
+    "updateErrorSignature": "Update signature verification failed",
+    "updateErrorUnknown": "Unknown error"
+  },
+  "localeOptions": {
+    "zh-CN": "简体中文",
+    "en": "English"
+  },
+  "fontSizeOptions": {
+    "12": "12 px",
+    "13": "13 px",
+    "14": "14 px",
+    "15": "15 px",
+    "16": "16 px"
+  }
+}

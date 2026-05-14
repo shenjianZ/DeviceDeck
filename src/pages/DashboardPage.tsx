@@ -7,16 +7,18 @@ import {
   Terminal,
   ArrowRight,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useDeviceStore } from "../stores/deviceStore";
 import { useMirrorStore } from "../stores/mirrorStore";
 import { useLogStore } from "../stores/logStore";
 import { usePageStore } from "../stores/pageStore";
 import { Badge } from "../components/ui/Badge";
-import { STATUS_NAMES, SOURCE_NAMES } from "../lib/presets";
+import { getStatusNames, getSourceNames } from "../lib/presets";
 import { formatTimeAgo } from "../lib/format";
 import type { Page } from "../types";
 
 export function DashboardPage() {
+  const { t } = useTranslation(["dashboard", "common", "logs"]);
   const devices = useDeviceStore((s) => s.devices);
   const environment = useDeviceStore((s) => s.environment);
   const isScanning = useDeviceStore((s) => s.isScanning);
@@ -24,6 +26,9 @@ export function DashboardPage() {
   const sessions = useMirrorStore((s) => s.sessions);
   const logs = useLogStore((s) => s.logs);
   const setPage = usePageStore((s) => s.setPage);
+
+  const statusNames = getStatusNames(t);
+  const sourceNames = getSourceNames(t);
 
   const onlineCount = devices.filter((d) => d.status === "online").length;
   const runningSessions = sessions.filter((s) => s.status === "running").length;
@@ -33,7 +38,7 @@ export function DashboardPage() {
 
   return (
     <div>
-      <h2 className="sec-title flush">环境状态</h2>
+      <h2 className="sec-title flush">{t("dashboard:envStatus")}</h2>
       <div className="grid2">
         <div className="env-row">
           <div className="env-icon" style={{ background: environment?.adb?.available ? "var(--ok-s)" : "var(--err-s)", color: environment?.adb?.available ? "var(--ok)" : "var(--err)" }}>
@@ -43,14 +48,14 @@ export function DashboardPage() {
             <div style={{ fontWeight: 600, fontSize: 13 }}>ADB</div>
             <div style={{ color: "var(--t2)", fontSize: 12 }}>
               {environment?.adb?.available
-                ? environment.adb.version ?? "可用"
-                : environment?.adb?.message ?? "检测中..."}
+                ? environment.adb.version ?? t("dashboard:available")
+                : environment?.adb?.message ?? t("dashboard:detecting")}
             </div>
           </div>
           {environment?.adb?.available ? (
-            <Badge variant="online">正常</Badge>
+            <Badge variant="online">{t("common:status.normal")}</Badge>
           ) : (
-            <Badge variant="offline">不可用</Badge>
+            <Badge variant="offline">{t("common:status.unavailable")}</Badge>
           )}
         </div>
         <div className="env-row">
@@ -61,69 +66,69 @@ export function DashboardPage() {
             <div style={{ fontWeight: 600, fontSize: 13 }}>Scrcpy</div>
             <div style={{ color: "var(--t2)", fontSize: 12 }}>
               {environment?.scrcpy?.available
-                ? environment.scrcpy.version ?? "可用"
-                : environment?.scrcpy?.message ?? "检测中..."}
+                ? environment.scrcpy.version ?? t("dashboard:available")
+                : environment?.scrcpy?.message ?? t("dashboard:detecting")}
             </div>
           </div>
           {environment?.scrcpy?.available ? (
-            <Badge variant="online">正常</Badge>
+            <Badge variant="online">{t("common:status.normal")}</Badge>
           ) : (
-            <Badge variant="offline">不可用</Badge>
+            <Badge variant="offline">{t("common:status.unavailable")}</Badge>
           )}
         </div>
       </div>
 
-      <h2 className="sec-title">概览</h2>
+      <h2 className="sec-title">{t("dashboard:overview")}</h2>
       <div className="grid3">
         <div className="card">
-          <div className="card-title">已连接设备</div>
+          <div className="card-title">{t("dashboard:totalDevices")}</div>
           <div className="card-val">{devices.length}</div>
           <div style={{ color: "var(--t2)", fontSize: 12, marginTop: 4 }}>
-            {onlineCount} 在线
+            {onlineCount} {t("dashboard:onlineCount")}
           </div>
         </div>
         <div className="card">
-          <div className="card-title">投屏会话</div>
+          <div className="card-title">{t("dashboard:activeSessions")}</div>
           <div className="card-val">{runningSessions}</div>
           <div style={{ color: "var(--t2)", fontSize: 12, marginTop: 4 }}>
-            运行中
+            {t("dashboard:running")}
           </div>
         </div>
         <div className="card">
-          <div className="card-title">日志条目</div>
+          <div className="card-title">{t("dashboard:logEntries")}</div>
           <div className="card-val">{logs.length}</div>
           <div style={{ color: "var(--t2)", fontSize: 12, marginTop: 4 }}>
-            总记录
+            {t("dashboard:totalRecords")}
           </div>
         </div>
       </div>
 
-      <h2 className="sec-title">快捷操作</h2>
+      <h2 className="sec-title">{t("dashboard:quickActions")}</h2>
       <div className="row" style={{ gap: 8 }}>
-        <button className="btn btn-p" onClick={scanDevices} disabled={isScanning} type="button">
+        <button className="btn btn-p" onClick={() => scanDevices()} disabled={isScanning} type="button">
           <RefreshCw size={14} className={isScanning ? "spin" : ""} />
-          {isScanning ? "扫描中..." : "扫描设备"}
+          {isScanning ? t("dashboard:scanning") : t("dashboard:scanDevices")}
         </button>
         <button className="btn btn-s" onClick={goTo("devices")} type="button">
           <Smartphone size={14} />
-          设备管理
+          {t("dashboard:deviceManagement")}
           <ArrowRight size={12} />
         </button>
         <button className="btn btn-s" onClick={goTo("mirror")} type="button">
           <Monitor size={14} />
-          投屏控制
+          {t("dashboard:mirrorControl")}
           <ArrowRight size={12} />
         </button>
         <button className="btn btn-s" onClick={goTo("logs")} type="button">
           <Activity size={14} />
-          运行日志
+          {t("dashboard:runLogs")}
           <ArrowRight size={12} />
         </button>
       </div>
 
       {devices.length > 0 && (
         <>
-          <h2 className="sec-title">设备列表</h2>
+          <h2 className="sec-title">{t("dashboard:deviceList")}</h2>
           <div className="grid3">
             {devices.map((d) => (
               <div key={d.id} className="card" style={{ cursor: "pointer" }} onClick={goTo("devices")}>
@@ -133,7 +138,7 @@ export function DashboardPage() {
                 </div>
                 <div className="row">
                   <Badge variant={d.status === "online" ? "online" : d.status === "offline" ? "offline" : "unauthorized"}>
-                    {STATUS_NAMES[d.status] ?? d.status}
+                    {statusNames[d.status] ?? d.status}
                   </Badge>
                   <span style={{ color: "var(--t2)", fontSize: 11 }}>{d.serial}</span>
                 </div>
@@ -145,7 +150,7 @@ export function DashboardPage() {
 
       {recentLogs.length > 0 && (
         <>
-          <h2 className="sec-title">最近日志</h2>
+          <h2 className="sec-title">{t("dashboard:recentLogs")}</h2>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {recentLogs.map((log) => (
               <div key={log.id} className="row" style={{ fontSize: 12, padding: "4px 0", borderBottom: "1px solid var(--bd)" }}>
@@ -153,7 +158,7 @@ export function DashboardPage() {
                   {formatTimeAgo(log.time)}
                 </span>
                 <Badge variant={log.source === "system" ? "system" : log.source === "adb" ? "adb" : "scrcpy"}>
-                  {SOURCE_NAMES[log.source] ?? log.source}
+                  {sourceNames[log.source] ?? log.source}
                 </Badge>
                 <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {log.message}
@@ -167,7 +172,7 @@ export function DashboardPage() {
       {devices.length === 0 && logs.length === 0 && (
         <div className="empty" style={{ marginTop: 24 }}>
           <Cpu size={32} />
-          <span>暂无数据，点击「扫描设备」开始</span>
+          <span>{t("dashboard:noData")}</span>
         </div>
       )}
 

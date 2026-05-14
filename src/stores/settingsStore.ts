@@ -1,5 +1,7 @@
 import { create } from "zustand";
 import { tauriApi } from "../lib/tauri";
+import { useNotificationStore } from "./notificationStore";
+import { applyTheme } from "../lib/theme";
 import type { AppSettings, AppError } from "../types";
 
 interface SettingsStore {
@@ -10,6 +12,7 @@ interface SettingsStore {
   loadSettings: () => Promise<void>;
   updateSettings: (settings: AppSettings) => Promise<void>;
   resetSettings: () => Promise<void>;
+  updateSetting: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => Promise<void>;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -31,9 +34,39 @@ const DEFAULT_SETTINGS: AppSettings = {
   logRetentionDays: 7,
   autoScanDevices: true,
   deviceScanIntervalSeconds: 30,
+  fontSize: 14,
+  locale: "zh-CN",
+  autoStart: false,
+  autoUpdateEnabled: true,
 };
 
-export const useSettingsStore = create<SettingsStore>((set) => ({
+function applyFontSize(fontSize: number) {
+  const root = document.documentElement;
+  root.style.setProperty("--font-size-base", `${fontSize}px`);
+  root.style.setProperty("--font-size-xs", `${Math.max(11, fontSize - 2)}px`);
+  root.style.setProperty("--font-size-sm", `${Math.max(12, fontSize - 1)}px`);
+  root.style.setProperty("--font-size-md", `${fontSize}px`);
+  root.style.setProperty("--font-size-lg", `${fontSize + 2}px`);
+  root.style.setProperty("--font-size-xl", `${fontSize + 5}px`);
+  root.style.setProperty("--font-size-2xl", `${fontSize + 9}px`);
+  document.body.style.fontSize = `${fontSize}px`;
+}
+
+function applySettingSideEffect(key: keyof AppSettings, value: AppSettings[keyof AppSettings]) {
+  switch (key) {
+    case "theme":
+      applyTheme(value as "dark" | "light");
+      break;
+    case "fontSize":
+      if (typeof value === "number") applyFontSize(value);
+      break;
+    case "autoStart":
+      tauriApi.setAutostart(value as boolean).catch(() => {});
+      break;
+  }
+}
+
+export const useSettingsStore = create<SettingsStore>((set, get) => ({
   settings: { ...DEFAULT_SETTINGS },
   isLoading: false,
   error: null,
@@ -43,6 +76,9 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
     try {
       const settings = await tauriApi.getSettings();
       set({ settings, isLoading: false });
+      if (settings.fontSize) {
+        applyFontSize(settings.fontSize);
+      }
     } catch (e: unknown) {
       set({ error: e as AppError, isLoading: false });
     }
@@ -52,8 +88,14 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
     try {
       await tauriApi.updateSettings(settings);
       set({ settings, error: null });
+      if (settings.fontSize) {
+        applyFontSize(settings.fontSize);
+      }
+      useNotificationStore.getState().showSuccess("设置已保存");
     } catch (e: unknown) {
-      set({ error: e as AppError });
+      const err = e as AppError;
+      set({ error: err });
+      useNotificationStore.getState().showError("保存设置失败", err.message, err.suggestion);
     }
   },
 
@@ -61,8 +103,28 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
     try {
       const settings = await tauriApi.resetSettings();
       set({ settings, error: null });
+      if (settings.fontSize) {
+        applyFontSize(settings.fontSize);
+      }
+      useNotificationStore.getState().showSuccess("设置已重置为默认值");
     } catch (e: unknown) {
-      set({ error: e as AppError });
+      const err = e as AppError;
+      set({ error: err });
+      useNotificationStore.getState().showError("重置设置失败", err.message, err.suggestion);
+    }
+  },
+
+  updateSetting: async (key, value) => {
+    const current = get().settings;
+    const updated = { ...current, [key]: value };
+    try {
+      await tauriApi.updateSettings(updated);
+      set({ settings: updated, error: null });
+      applySettingSideEffect(key, value);
+    } catch (e: unknown) {
+      const err = e as AppError;
+      set({ error: err });
+      useNotificationStore.getState().showError("保存设置失败", err.message, err.suggestion);
     }
   },
 }));

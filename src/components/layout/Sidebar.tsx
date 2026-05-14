@@ -1,12 +1,13 @@
 import { FileText, LayoutGrid, Monitor, Settings, Smartphone } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { Page } from "../../types";
 
-const NAV: { id: Page; icon: typeof LayoutGrid; label: string }[] = [
-  { id: "dashboard", icon: LayoutGrid, label: "仪表盘" },
-  { id: "devices", icon: Smartphone, label: "设备" },
-  { id: "mirror", icon: Monitor, label: "投屏" },
-  { id: "logs", icon: FileText, label: "日志" },
-  { id: "settings", icon: Settings, label: "设置" },
+const NAV_ITEMS: { id: Page; icon: typeof LayoutGrid; labelKey: string }[] = [
+  { id: "dashboard", icon: LayoutGrid, labelKey: "sidebar:dashboard" },
+  { id: "devices", icon: Smartphone, labelKey: "sidebar:devices" },
+  { id: "mirror", icon: Monitor, labelKey: "sidebar:mirror" },
+  { id: "logs", icon: FileText, labelKey: "sidebar:logs" },
+  { id: "settings", icon: Settings, labelKey: "sidebar:settings" },
 ];
 
 interface SidebarProps {
@@ -15,9 +16,11 @@ interface SidebarProps {
 }
 
 export function Sidebar({ page, onNav }: SidebarProps) {
+  const { t } = useTranslation(["sidebar"]);
+
   return (
     <div className="sidebar">
-      {NAV.map((n) => {
+      {NAV_ITEMS.map((n) => {
         const Icon = n.icon;
         const active = page === n.id;
         return (
@@ -25,11 +28,11 @@ export function Sidebar({ page, onNav }: SidebarProps) {
             key={n.id}
             className={`sb-item${active ? " active" : ""}`}
             onClick={() => onNav(n.id)}
-            title={n.label}
+            title={t(n.labelKey)}
             type="button"
           >
             <Icon size={18} />
-            <span className="sb-tip">{n.label}</span>
+            <span className="sb-label">{t(n.labelKey)}</span>
           </button>
         );
       })}
