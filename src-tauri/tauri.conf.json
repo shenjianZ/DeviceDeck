@@ -39,6 +39,7 @@
         ],
         "createUpdaterArtifacts": true
     },
+
     "plugins": {
         "updater": {
             "pubkey": "__DEVICEDECK_TAURI_UPDATER_PUBLIC_KEY__",

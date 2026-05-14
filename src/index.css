@@ -206,11 +206,19 @@ input {
   width: 100%;
   height: 100%;
   display: flex;
+  flex-direction: column;
   overflow: hidden;
   background: var(--bg-0);
   color: var(--t0);
   font-size: var(--font-size-base);
   transition: background 0.2s, color 0.2s;
+}
+
+.app-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
 }
 
 .main {
@@ -341,14 +349,8 @@ input {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 16px;
+  padding: 0 14px;
   border-bottom: 1px solid var(--bd);
-}
-
-.topbar-title {
-  flex: 1;
-  font-size: var(--font-size-lg);
-  font-weight: 600;
 }
 
 .topbar-status {
@@ -503,8 +505,11 @@ input {
 }
 
 .grid4.config-grid {
-  grid-template-columns: repeat(4, minmax(150px, 1fr));
-  justify-items: start;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+}
+
+.config-grid > .col {
+  min-width: 0;
 }
 
 .sec-title {
@@ -706,7 +711,9 @@ input {
 
 .dd {
   position: relative;
-  display: inline-block;
+  display: block;
+  width: 100%;
+  min-width: 0;
 }
 
 .dd-trigger {
@@ -788,6 +795,22 @@ input {
 
 .dd-panel::-webkit-scrollbar-thumb:hover {
   background: var(--bdh);
+}
+
+.toolbar-select {
+  width: 124px;
+  flex: 0 0 124px;
+  min-width: 0;
+}
+
+.device-select {
+  width: 100%;
+  min-width: 0;
+}
+
+.settings-config-select {
+  width: 100%;
+  min-width: 0;
 }
 
 .dd-opt {
@@ -1201,6 +1224,12 @@ input {
 
 .settings-value {
   color: var(--t2);
+}
+
+.settings-compact-select {
+  width: 120px;
+  flex: 0 0 120px;
+  margin-left: auto;
 }
 
 .settings-actions {

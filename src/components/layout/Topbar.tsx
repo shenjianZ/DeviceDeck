@@ -12,13 +12,12 @@ try {
 }
 
 interface TopbarProps {
-  title: string;
   theme: "dark" | "light";
   onToggleTheme: () => void;
   environment: EnvironmentStatus | null;
 }
 
-export function Topbar({ title, theme, onToggleTheme, environment }: TopbarProps) {
+export function Topbar({ theme, onToggleTheme, environment }: TopbarProps) {
   const { t } = useTranslation(["topbar"]);
   const adbOk = environment?.adb?.available ?? false;
   const scrcpyOk = environment?.scrcpy?.available ?? false;
@@ -59,8 +58,6 @@ export function Topbar({ title, theme, onToggleTheme, environment }: TopbarProps
     <header className="topbar" data-tauri-drag-region>
       <div className="topbar-left">
         <div className="topbar-brand">DeviceDeck</div>
-        <div className="topbar-divider" />
-        <div className="topbar-title">{title}</div>
       </div>
 
       <div className="topbar-center" />

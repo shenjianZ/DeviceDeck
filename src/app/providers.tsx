@@ -5,6 +5,7 @@ import { useLogStore } from "../stores/logStore";
 import { useMirrorStore } from "../stores/mirrorStore";
 import { useSettingsStore } from "../stores/settingsStore";
 import { applyTheme } from "../lib/theme";
+import { installContextMenuBlocker, installShortcutBlocker } from "../lib/keyboardShortcuts";
 import { AppShell } from "../components/layout/AppShell";
 
 export function AppProviders() {
@@ -24,6 +25,9 @@ export function AppProviders() {
   });
 
   const unlistenRefs = useRef<UnlistenFn[]>([]);
+
+  useEffect(() => installShortcutBlocker(), []);
+  useEffect(() => installContextMenuBlocker(), []);
 
   // Sync theme from store to local state (when settings load from backend)
   useEffect(() => {

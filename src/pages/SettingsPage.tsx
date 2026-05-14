@@ -83,6 +83,7 @@ export function SettingsPage() {
           <div className="settings-row">
             <span className="settings-label">{t("settings:appearance.language")}</span>
             <Dropdown
+              className="settings-compact-select"
               value={settings.locale || "zh-CN"}
               onChange={(v) => {
                 updateSetting("locale", v as "zh-CN" | "en");
@@ -98,6 +99,7 @@ export function SettingsPage() {
           <div className="settings-row">
             <span className="settings-label">{t("settings:appearance.fontSize")}</span>
             <Dropdown
+              className="settings-compact-select"
               value={String(settings.fontSize || 14)}
               onChange={(v) => updateSetting("fontSize", Number(v))}
               options={FONT_SIZE_OPTIONS}
@@ -237,13 +239,14 @@ export function SettingsPage() {
               </div>
               <input
                 className="inp"
-                type="number"
-                min={5}
-                max={600}
-                value={settings.deviceScanIntervalSeconds}
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={String(settings.deviceScanIntervalSeconds)}
                 onChange={(e) => {
-                  const value = parseInt(e.target.value, 10);
-                  updateSetting("deviceScanIntervalSeconds", Number.isFinite(value) ? clampScanInterval(value) : 30);
+                  const digits = e.target.value.replace(/\D/g, "");
+                  if (!digits) return;
+                  updateSetting("deviceScanIntervalSeconds", clampScanInterval(parseInt(digits, 10)));
                 }}
                 style={{ width: 88, textAlign: "center" }}
                 disabled={!settings.autoScanDevices}
@@ -303,6 +306,7 @@ export function SettingsPage() {
             <div className="col">
               <label style={{ fontSize: 11, color: "var(--t2)", fontWeight: 600 }}>{t("mirror:resolution")}</label>
               <Dropdown
+                className="settings-config-select"
                 value={settings.defaultMirrorConfig.maxSize}
                 onChange={(v) => updateDefaultConfig({ maxSize: v })}
                 options={optRes}
@@ -311,6 +315,7 @@ export function SettingsPage() {
             <div className="col">
               <label style={{ fontSize: 11, color: "var(--t2)", fontWeight: 600 }}>{t("mirror:bitrate")}</label>
               <Dropdown
+                className="settings-config-select"
                 value={settings.defaultMirrorConfig.videoBitRate}
                 onChange={(v) => updateDefaultConfig({ videoBitRate: v })}
                 options={OPT_BR}
@@ -319,6 +324,7 @@ export function SettingsPage() {
             <div className="col">
               <label style={{ fontSize: 11, color: "var(--t2)", fontWeight: 600 }}>{t("mirror:fps")}</label>
               <Dropdown
+                className="settings-config-select"
                 value={settings.defaultMirrorConfig.maxFps}
                 onChange={(v) => updateDefaultConfig({ maxFps: v })}
                 options={OPT_FPS}
@@ -327,6 +333,7 @@ export function SettingsPage() {
             <div className="col">
               <label style={{ fontSize: 11, color: "var(--t2)", fontWeight: 600 }}>{t("mirror:codec")}</label>
               <Dropdown
+                className="settings-config-select"
                 value={settings.defaultMirrorConfig.videoCodec}
                 onChange={(v) => updateDefaultConfig({ videoCodec: v })}
                 options={optCodec}
@@ -378,11 +385,16 @@ export function SettingsPage() {
             </div>
             <input
               className="inp"
-              type="number"
-              min={1}
-              max={365}
-              value={settings.logRetentionDays}
-              onChange={(e) => updateSetting("logRetentionDays", parseInt(e.target.value, 10) || 7)}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={String(settings.logRetentionDays)}
+              onChange={(e) => {
+                const digits = e.target.value.replace(/\D/g, "");
+                if (!digits) return;
+                const value = parseInt(digits, 10);
+                updateSetting("logRetentionDays", Math.min(365, Math.max(1, value)));
+              }}
               style={{ width: 80, textAlign: "center" }}
             />
           </div>

@@ -3,11 +3,14 @@ import { Monitor, Play, RefreshCw, Square, Usb, Wifi } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Badge } from "../components/ui/Badge";
 import { Dropdown } from "../components/ui/Dropdown";
+import { Pagination } from "../components/ui/Pagination";
 import { useDeviceStore } from "../stores/deviceStore";
 import { useMirrorStore } from "../stores/mirrorStore";
 import { getStatusNames } from "../lib/presets";
 import { formatTimeAgo } from "../lib/format";
 import type { WirelessAdbService } from "../types";
+
+const SESSION_PAGE_SIZE = 5;
 
 export function MirrorPage() {
   const { t } = useTranslation(["mirror", "common"]);
@@ -55,6 +58,7 @@ export function MirrorPage() {
   const [pairCode, setPairCode] = useState("");
   const [manualHost, setManualHost] = useState("");
   const [manualPort, setManualPort] = useState(5555);
+  const [sessionPage, setSessionPage] = useState(1);
 
   useEffect(() => {
     if (!selectedUsbSerial && usbDevices.length > 0) {
@@ -90,7 +94,27 @@ export function MirrorPage() {
   );
 
   const runningSessions = sessions.filter((session) => session.status === "running");
+  const sortedSessions = useMemo(
+    () =>
+      [...sessions].sort((a, b) => {
+        if (a.status === "running" && b.status !== "running") return -1;
+        if (a.status !== "running" && b.status === "running") return 1;
+        return b.startedAt - a.startedAt;
+      }),
+    [sessions]
+  );
+  const sessionTotalPages = Math.max(1, Math.ceil(sortedSessions.length / SESSION_PAGE_SIZE));
+  const visibleSessions = sortedSessions.slice(
+    (sessionPage - 1) * SESSION_PAGE_SIZE,
+    sessionPage * SESSION_PAGE_SIZE
+  );
   const isBusy = isStarting || isWirelessBusy || isDiscoveringWireless;
+
+  useEffect(() => {
+    if (sessionPage > sessionTotalPages) {
+      setSessionPage(sessionTotalPages);
+    }
+  }, [sessionPage, sessionTotalPages]);
 
   const handleRefreshAll = async () => {
     await Promise.all([scanDevices(), discoverWirelessDevices()]);
@@ -140,6 +164,7 @@ export function MirrorPage() {
             </div>
           </div>
           <Dropdown
+            className="device-select"
             value={selectedUsbSerial}
             onChange={setSelectedUsbSerial}
             options={usbOptions}
@@ -167,6 +192,7 @@ export function MirrorPage() {
           </div>
           <div className="grid2" style={{ marginBottom: 10 }}>
             <Dropdown
+              className="device-select"
               value={selectedUsbSerial}
               onChange={setSelectedUsbSerial}
               options={usbOptions}
@@ -174,11 +200,15 @@ export function MirrorPage() {
             />
             <input
               className="inp"
-              type="number"
-              min={1}
-              max={65535}
-              value={wirelessPort}
-              onChange={(event) => setWirelessPort(parseInt(event.target.value, 10) || 5555)}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={String(wirelessPort)}
+              onChange={(event) => {
+                const digits = event.target.value.replace(/\D/g, "");
+                if (!digits) return;
+                setWirelessPort(clampPort(parseInt(digits, 10)));
+              }}
             />
           </div>
           <button
@@ -214,6 +244,7 @@ export function MirrorPage() {
             <div className="col">
               <label style={{ fontSize: 11, color: "var(--t2)", fontWeight: 600 }}>{t("mirror:connectableDevices")}</label>
               <Dropdown
+                className="device-select"
                 value={selectedConnectId}
                 onChange={setSelectedConnectId}
                 options={connectOptions}
@@ -223,6 +254,7 @@ export function MirrorPage() {
             <div className="col">
               <label style={{ fontSize: 11, color: "var(--t2)", fontWeight: 600 }}>{t("mirror:connectedWifiAdb")}</label>
               <Dropdown
+                className="device-select"
                 value={selectedWifiSerial}
                 onChange={setSelectedWifiSerial}
                 options={wifiDeviceOptions}
@@ -259,6 +291,7 @@ export function MirrorPage() {
             <div className="col">
               <label style={{ fontSize: 11, color: "var(--t2)", fontWeight: 600 }}>{t("mirror:pairingService")}</label>
               <Dropdown
+                className="device-select"
                 value={selectedPairingId}
                 onChange={setSelectedPairingId}
                 options={pairingOptions}
@@ -301,11 +334,15 @@ export function MirrorPage() {
             <label style={{ fontSize: 11, color: "var(--t2)", fontWeight: 600 }}>{t("mirror:connectPort")}</label>
             <input
               className="inp"
-              type="number"
-              min={1}
-              max={65535}
-              value={manualPort}
-              onChange={(event) => setManualPort(parseInt(event.target.value, 10) || 5555)}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={String(manualPort)}
+              onChange={(event) => {
+                const digits = event.target.value.replace(/\D/g, "");
+                if (!digits) return;
+                setManualPort(clampPort(parseInt(digits, 10)));
+              }}
             />
           </div>
         </div>
@@ -334,8 +371,8 @@ export function MirrorPage() {
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {sessions.map((session) => (
-            <div key={session.id} className="session-row">
+          {visibleSessions.map((session) => (
+            <div key={session.id} className="session-row" data-testid="mirror-session-row">
               <Monitor size={16} style={{ color: session.status === "running" ? "var(--ok)" : "var(--t2)", flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="row" style={{ gap: 6 }}>
@@ -363,6 +400,14 @@ export function MirrorPage() {
               )}
             </div>
           ))}
+          <Pagination
+            page={sessionPage}
+            totalPages={sessionTotalPages}
+            total={sortedSessions.length}
+            pageSize={SESSION_PAGE_SIZE}
+            isLoading={false}
+            onPageChange={setSessionPage}
+          />
         </div>
       )}
 
@@ -379,4 +424,9 @@ function serviceOption(service: WirelessAdbService) {
     value: service.id,
     label: `${service.name || "Android"} (${service.host}:${service.port})`,
   };
+}
+
+function clampPort(value: number): number {
+  if (!Number.isFinite(value)) return 5555;
+  return Math.min(65535, Math.max(1, Math.round(value)));
 }

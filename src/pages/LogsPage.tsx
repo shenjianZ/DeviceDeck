@@ -73,11 +73,13 @@ export function LogsPage() {
     <div className="logs-page">
       <div className="action-bar">
         <Dropdown
+          className="toolbar-select"
           value={sourceFilter}
           onChange={(v) => setFilter(v, undefined)}
           options={sourceFilterOptions}
         />
         <Dropdown
+          className="toolbar-select"
           value={levelFilter}
           onChange={(v) => setFilter(undefined, v)}
           options={levelFilterOptions}
