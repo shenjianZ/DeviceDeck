@@ -164,6 +164,8 @@ pub struct MirrorConfig {
     pub stay_awake: bool,
     pub turn_screen_off: bool,
     #[serde(default)]
+    pub screen_black_mode: bool,
+    #[serde(default)]
     pub record_mode: RecordMode,
     #[serde(default)]
     pub record_format: RecordFormat,
@@ -199,6 +201,7 @@ impl Default for MirrorConfig {
             no_control: false,
             stay_awake: true,
             turn_screen_off: false,
+            screen_black_mode: false,
             record_mode: RecordMode::Off,
             record_format: RecordFormat::Mp4,
             record_directory: String::new(),

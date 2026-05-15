@@ -15,6 +15,8 @@
   "stayAwakeDesc": "Prevent device from sleeping during mirroring",
   "turnScreenOff": "Turn Screen Off",
   "turnScreenOffDesc": "Turn off phone screen after mirror starts",
+  "screenBlackMode": "Black Screen Mode",
+  "screenBlackModeDesc": "Turn off phone screen but keep device awake (control via PC)",
   "usbConnection": "USB Connection",
   "usbMirror": "USB Mirror",
   "usbMirrorDesc": "Start scrcpy using current USB ADB connection",

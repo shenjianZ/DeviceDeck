@@ -30,6 +30,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     noControl: false,
     stayAwake: true,
     turnScreenOff: false,
+    screenBlackMode: false,
   },
   lastMirrorConfig: null,
   theme: "dark",

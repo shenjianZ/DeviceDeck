@@ -71,11 +71,16 @@ pub fn build_scrcpy_args(serial: &str, config: &MirrorConfig) -> Result<Vec<Stri
     if config.no_control {
         args.push("--no-control".into());
     }
-    if config.stay_awake {
-        args.push("--stay-awake".into());
-    }
-    if config.turn_screen_off {
+    if config.screen_black_mode {
         args.push("--turn-screen-off".into());
+        args.push("--stay-awake".into());
+    } else {
+        if config.stay_awake {
+            args.push("--stay-awake".into());
+        }
+        if config.turn_screen_off {
+            args.push("--turn-screen-off".into());
+        }
     }
     if config.record_mode != RecordMode::Off {
         args.extend(["--record".into(), build_record_path(serial, config)]);

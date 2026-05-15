@@ -16,6 +16,7 @@ const baseConfig = {
   noControl: false,
   stayAwake: true,
   turnScreenOff: false,
+  screenBlackMode: false,
 }
 
 function session(id: string, status: MirrorSession['status'], startedAt: number): MirrorSession {

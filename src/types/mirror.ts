@@ -19,6 +19,7 @@ export interface MirrorConfig {
   noControl: boolean;
   stayAwake: boolean;
   turnScreenOff: boolean;
+  screenBlackMode: boolean;
   recordMode: RecordMode;
   recordFormat: RecordFormat;
   recordDirectory: string;

@@ -14,6 +14,7 @@ export const PRESET_CONFIGS: Omit<MirrorPreset, "name" | "description">[] = [
       noControl: false,
       stayAwake: true,
       turnScreenOff: false,
+      screenBlackMode: false,
     },
   },
   {
@@ -27,6 +28,7 @@ export const PRESET_CONFIGS: Omit<MirrorPreset, "name" | "description">[] = [
       noControl: false,
       stayAwake: true,
       turnScreenOff: false,
+      screenBlackMode: false,
     },
   },
   {
@@ -40,6 +42,7 @@ export const PRESET_CONFIGS: Omit<MirrorPreset, "name" | "description">[] = [
       noControl: false,
       stayAwake: true,
       turnScreenOff: false,
+      screenBlackMode: false,
     },
   },
   {
@@ -53,6 +56,7 @@ export const PRESET_CONFIGS: Omit<MirrorPreset, "name" | "description">[] = [
       noControl: false,
       stayAwake: true,
       turnScreenOff: false,
+      screenBlackMode: false,
     },
   },
 ];

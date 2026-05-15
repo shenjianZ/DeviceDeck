@@ -31,6 +31,7 @@ const DEFAULT_CONFIG: MirrorConfig = {
   noControl: false,
   stayAwake: true,
   turnScreenOff: false,
+  screenBlackMode: false,
 };
 
 export const useMirrorStore = create<MirrorStore>((set, get) => ({

@@ -405,22 +405,12 @@ export function SettingsPage() {
           </div>
           <div className="settings-row">
             <div>
-              <div style={{ fontWeight: 500 }}>{t("mirror:stayAwake")}</div>
-              <div className="settings-desc">{t("mirror:stayAwakeDesc")}</div>
+              <div style={{ fontWeight: 500 }}>{t("mirror:screenBlackMode")}</div>
+              <div className="settings-desc">{t("mirror:screenBlackModeDesc")}</div>
             </div>
             <Toggle
-              on={settings.defaultMirrorConfig.stayAwake}
-              onChange={(v) => updateDefaultConfig({ stayAwake: v })}
-            />
-          </div>
-          <div className="settings-row">
-            <div>
-              <div style={{ fontWeight: 500 }}>{t("mirror:turnScreenOff")}</div>
-              <div className="settings-desc">{t("mirror:turnScreenOffDesc")}</div>
-            </div>
-            <Toggle
-              on={settings.defaultMirrorConfig.turnScreenOff}
-              onChange={(v) => updateDefaultConfig({ turnScreenOff: v })}
+              on={settings.defaultMirrorConfig.screenBlackMode}
+              onChange={(v) => updateDefaultConfig({ screenBlackMode: v })}
             />
           </div>
           <div className="grid4 config-grid" style={{ marginTop: 12, marginBottom: 12 }}>

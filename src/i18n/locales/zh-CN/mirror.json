@@ -15,6 +15,8 @@
   "stayAwakeDesc": "投屏时阻止设备自动息屏",
   "turnScreenOff": "关闭设备屏幕",
   "turnScreenOffDesc": "投屏启动后关闭手机屏幕",
+  "screenBlackMode": "黑屏不息屏",
+  "screenBlackModeDesc": "关闭手机物理屏幕，但设备保持唤醒状态（通过电脑操控）",
   "usbConnection": "USB 连接",
   "usbMirror": "USB 投屏",
   "usbMirrorDesc": "使用当前 USB ADB 连接直接启动 scrcpy",

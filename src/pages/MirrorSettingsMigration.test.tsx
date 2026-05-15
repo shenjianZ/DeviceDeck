@@ -16,8 +16,7 @@ describe('mirror settings placement', () => {
     expect(screen.getByText('极清模式')).toBeInTheDocument()
     expect(screen.getByText('H.265 极致')).toBeInTheDocument()
     expect(screen.getByText('只读模式')).toBeInTheDocument()
-    expect(screen.getByText('保持唤醒')).toBeInTheDocument()
-    expect(screen.getByText('关闭设备屏幕')).toBeInTheDocument()
+    expect(screen.getByText('黑屏不息屏')).toBeInTheDocument()
   })
 
   it('removes mirror parameter presets from the Mirror page', () => {
