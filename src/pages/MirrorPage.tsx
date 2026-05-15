@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Monitor, Play, RefreshCw, Square, Usb, Wifi } from "lucide-react";
+import { Monitor, Moon, Play, RefreshCw, Square, Sun, Usb, Wifi } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Badge } from "../components/ui/Badge";
 import { Dropdown } from "../components/ui/Dropdown";
@@ -31,6 +31,7 @@ export function MirrorPage() {
   const startWirelessMirror = useMirrorStore((s) => s.startWirelessMirror);
   const connectWirelessAndStartMirror = useMirrorStore((s) => s.connectWirelessAndStartMirror);
   const stopMirror = useMirrorStore((s) => s.stopMirror);
+  const runKeyAction = useDeviceStore((s) => s.runKeyAction);
 
   const statusNames = getStatusNames(t);
 
@@ -59,6 +60,7 @@ export function MirrorPage() {
   const [manualHost, setManualHost] = useState("");
   const [manualPort, setManualPort] = useState(5555);
   const [sessionPage, setSessionPage] = useState(1);
+  const [screenOffSessions, setScreenOffSessions] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!selectedUsbSerial && usbDevices.length > 0) {
@@ -388,15 +390,35 @@ export function MirrorPage() {
                 </div>
               </div>
               {session.status === "running" && (
-                <button
-                  className="btn btn-d"
-                  onClick={() => stopMirror(session.id)}
-                  disabled={isStopping === session.id}
-                  type="button"
-                >
-                  <Square size={12} />
-                  {isStopping === session.id ? t("mirror:stopping") : t("mirror:stop")}
-                </button>
+                <div className="row" style={{ gap: 6, flexShrink: 0 }}>
+                  <button
+                    className="btn btn-s"
+                    onClick={() => {
+                      const isOff = screenOffSessions.has(session.id);
+                      const action = isOff ? "screenRestore" : "screenBlack";
+                      runKeyAction(session.deviceSerial, action);
+                      setScreenOffSessions((prev) => {
+                        const next = new Set(prev);
+                        if (isOff) { next.delete(session.id); } else { next.add(session.id); }
+                        return next;
+                      });
+                    }}
+                    type="button"
+                  >
+                    {screenOffSessions.has(session.id)
+                      ? <><Sun size={12} />{t("mirror:screenRestore")}</>
+                      : <><Moon size={12} />{t("mirror:screenBlack")}</>}
+                  </button>
+                  <button
+                    className="btn btn-d"
+                    onClick={() => stopMirror(session.id)}
+                    disabled={isStopping === session.id}
+                    type="button"
+                  >
+                    <Square size={12} />
+                    {isStopping === session.id ? t("mirror:stopping") : t("mirror:stop")}
+                  </button>
+                </div>
               )}
             </div>
           ))}

@@ -71,4 +71,6 @@ export type DeviceKeyAction =
   | "volumeDown"
   | "expandNotifications"
   | "collapseNotifications"
-  | "turnScreenOff";
+  | "turnScreenOff"
+  | "screenBlack"
+  | "screenRestore";

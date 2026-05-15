@@ -17,6 +17,8 @@
   "turnScreenOffDesc": "Turn off phone screen after mirror starts",
   "screenBlackMode": "Black Screen Mode",
   "screenBlackModeDesc": "Turn off phone screen but keep device awake (control via PC)",
+  "screenBlack": "Black",
+  "screenRestore": "Restore",
   "usbConnection": "USB Connection",
   "usbMirror": "USB Mirror",
   "usbMirrorDesc": "Start scrcpy using current USB ADB connection",

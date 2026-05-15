@@ -283,6 +283,8 @@ pub enum DeviceKeyAction {
     ExpandNotifications,
     CollapseNotifications,
     TurnScreenOff,
+    ScreenBlack,
+    ScreenRestore,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -294,35 +294,80 @@ pub async fn execute_key_action(
     action: DeviceKeyAction,
 ) -> Result<DeviceActionResult, AppError> {
     validate_device_serial(serial)?;
-    let args = match action {
-        DeviceKeyAction::Home => vec!["-s", serial, "shell", "input", "keyevent", "HOME"],
-        DeviceKeyAction::Back => vec!["-s", serial, "shell", "input", "keyevent", "BACK"],
-        DeviceKeyAction::AppSwitch => {
-            vec!["-s", serial, "shell", "input", "keyevent", "APP_SWITCH"]
+    let timeout = std::time::Duration::from_secs(10);
+
+    match action {
+        DeviceKeyAction::ScreenBlack => {
+            let primary = vec!["-s", serial, "shell", "cmd", "display", "power-off"];
+            let result =
+                ShellRunner::execute_with_timeout(adb_path, &primary, timeout).await;
+            if let Ok(output) = result {
+                if output.success {
+                    return adb_action_result("屏幕已关闭", output);
+                }
+            }
+            let fallback = vec![
+                "-s", serial, "shell", "settings", "put", "system",
+                "screen_brightness", "0",
+            ];
+            let output = ShellRunner::execute_with_timeout(adb_path, &fallback, timeout).await?;
+            adb_action_result("屏幕亮度已调至最低", output)
         }
-        DeviceKeyAction::Menu => vec!["-s", serial, "shell", "input", "keyevent", "MENU"],
-        DeviceKeyAction::Power => vec!["-s", serial, "shell", "input", "keyevent", "POWER"],
-        DeviceKeyAction::VolumeUp => vec!["-s", serial, "shell", "input", "keyevent", "VOLUME_UP"],
-        DeviceKeyAction::VolumeDown => {
-            vec!["-s", serial, "shell", "input", "keyevent", "VOLUME_DOWN"]
+        DeviceKeyAction::ScreenRestore => {
+            let primary = vec!["-s", serial, "shell", "cmd", "display", "power-on"];
+            let result =
+                ShellRunner::execute_with_timeout(adb_path, &primary, timeout).await;
+            if let Ok(output) = result {
+                if output.success {
+                    return adb_action_result("屏幕已恢复", output);
+                }
+            }
+            let fallback = vec![
+                "-s", serial, "shell", "settings", "put", "system",
+                "screen_brightness_mode", "1",
+            ];
+            let output = ShellRunner::execute_with_timeout(adb_path, &fallback, timeout).await?;
+            adb_action_result("屏幕亮度已恢复", output)
         }
-        DeviceKeyAction::ExpandNotifications => vec![
-            "-s",
-            serial,
-            "shell",
-            "cmd",
-            "statusbar",
-            "expand-notifications",
-        ],
-        DeviceKeyAction::CollapseNotifications => {
-            vec!["-s", serial, "shell", "cmd", "statusbar", "collapse"]
+        _ => {
+            let args = match action {
+                DeviceKeyAction::Home => {
+                    vec!["-s", serial, "shell", "input", "keyevent", "HOME"]
+                }
+                DeviceKeyAction::Back => {
+                    vec!["-s", serial, "shell", "input", "keyevent", "BACK"]
+                }
+                DeviceKeyAction::AppSwitch => {
+                    vec!["-s", serial, "shell", "input", "keyevent", "APP_SWITCH"]
+                }
+                DeviceKeyAction::Menu => {
+                    vec!["-s", serial, "shell", "input", "keyevent", "MENU"]
+                }
+                DeviceKeyAction::Power => {
+                    vec!["-s", serial, "shell", "input", "keyevent", "POWER"]
+                }
+                DeviceKeyAction::VolumeUp => {
+                    vec!["-s", serial, "shell", "input", "keyevent", "VOLUME_UP"]
+                }
+                DeviceKeyAction::VolumeDown => {
+                    vec!["-s", serial, "shell", "input", "keyevent", "VOLUME_DOWN"]
+                }
+                DeviceKeyAction::ExpandNotifications => vec![
+                    "-s", serial, "shell", "cmd", "statusbar",
+                    "expand-notifications",
+                ],
+                DeviceKeyAction::CollapseNotifications => {
+                    vec!["-s", serial, "shell", "cmd", "statusbar", "collapse"]
+                }
+                DeviceKeyAction::TurnScreenOff => {
+                    vec!["-s", serial, "shell", "input", "keyevent", "SLEEP"]
+                }
+                _ => unreachable!(),
+            };
+            let output = ShellRunner::execute_with_timeout(adb_path, &args, timeout).await?;
+            adb_action_result("快捷操作已执行", output)
         }
-        DeviceKeyAction::TurnScreenOff => vec!["-s", serial, "shell", "input", "keyevent", "SLEEP"],
-    };
-    let output =
-        ShellRunner::execute_with_timeout(adb_path, &args, std::time::Duration::from_secs(10))
-            .await?;
-    adb_action_result("快捷操作已执行", output)
+    }
 }
 
 pub async fn execute_shell_command(
