@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::Mutex;
@@ -21,14 +22,16 @@ pub struct ProcessManager {
     processes: Arc<Mutex<HashMap<String, ManagedProcess>>>,
     log_bus: Arc<LogBus>,
     db: Arc<Database>,
+    app_handle: AppHandle,
 }
 
 impl ProcessManager {
-    pub fn new(log_bus: Arc<LogBus>, db: Arc<Database>) -> Self {
+    pub fn new(app_handle: AppHandle, log_bus: Arc<LogBus>, db: Arc<Database>) -> Self {
         Self {
             processes: Arc::new(Mutex::new(HashMap::new())),
             log_bus,
             db,
+            app_handle,
         }
     }
 
@@ -82,6 +85,7 @@ impl ProcessManager {
         let bus = self.log_bus.clone();
         let db = self.db.clone();
         let processes = self.processes.clone();
+        let app_handle = self.app_handle.clone();
 
         tokio::spawn(async move {
             let stdout_task = stdout.map(|stream| {
@@ -142,6 +146,10 @@ impl ProcessManager {
             };
             if let Err(error) = repo.update_session_status(&sid, status, Some(now_millis())) {
                 bus.scrcpy_error(&serial, &format!("更新会话状态失败: {error}"));
+            }
+
+            if let Err(e) = app_handle.emit("mirror://session-updated", ()) {
+                eprintln!("Failed to emit session-updated event: {e}");
             }
 
             let mut processes = processes.lock().await;

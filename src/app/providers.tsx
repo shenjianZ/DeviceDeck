@@ -103,7 +103,9 @@ export function AppProviders() {
   ]);
 
   const toggleTheme = () => {
-    setTheme((prev) => (prev === "dark" ? "light" : "dark"));
+    const newTheme = theme === "dark" ? "light" : "dark";
+    setTheme(newTheme);
+    useSettingsStore.getState().updateSetting("theme", newTheme);
   };
 
   return <AppShell theme={theme} onToggleTheme={toggleTheme} />;
