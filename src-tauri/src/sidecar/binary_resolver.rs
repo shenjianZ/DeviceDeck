@@ -52,7 +52,6 @@ impl BinaryResolver {
     }
 
     fn find_bundled(name: &str) -> Option<PathBuf> {
-        let exe_name = executable_name(name);
         let mut candidates = Vec::new();
 
         if let Some(dev_binary) = Self::find_dev_sidecar(name) {
@@ -61,12 +60,14 @@ impl BinaryResolver {
 
         if let Ok(current_exe) = std::env::current_exe() {
             if let Some(dir) = current_exe.parent() {
-                candidates.push(dir.join(&exe_name));
-                candidates.push(dir.join("sidecar").join(&exe_name));
-                candidates.push(dir.join("binaries").join(&exe_name));
-                candidates.push(dir.join("resources").join(&exe_name));
-                candidates.push(dir.join("resources").join("binaries").join(&exe_name));
-                candidates.push(dir.join("_up_").join("binaries").join(&exe_name));
+                for file_name in executable_file_names(name) {
+                    candidates.push(dir.join(&file_name));
+                    candidates.push(dir.join("sidecar").join(&file_name));
+                    candidates.push(dir.join("binaries").join(&file_name));
+                    candidates.push(dir.join("resources").join(&file_name));
+                    candidates.push(dir.join("resources").join("binaries").join(&file_name));
+                    candidates.push(dir.join("_up_").join("binaries").join(&file_name));
+                }
             }
         }
 
@@ -121,6 +122,45 @@ fn executable_name(name: &str) -> String {
 }
 
 #[cfg(windows)]
+fn executable_file_names(name: &str) -> Vec<String> {
+    let mut names = vec![executable_name(name)];
+
+    if let Some(target) = windows_target_triple() {
+        names.push(format!("{name}-{target}.exe"));
+    }
+
+    names
+}
+
+#[cfg(not(windows))]
+fn executable_file_names(name: &str) -> Vec<String> {
+    vec![executable_name(name)]
+}
+
+#[cfg(all(windows, target_arch = "x86_64"))]
+fn windows_target_triple() -> Option<&'static str> {
+    Some("x86_64-pc-windows-msvc")
+}
+
+#[cfg(all(windows, target_arch = "aarch64"))]
+fn windows_target_triple() -> Option<&'static str> {
+    Some("aarch64-pc-windows-msvc")
+}
+
+#[cfg(all(windows, target_arch = "x86"))]
+fn windows_target_triple() -> Option<&'static str> {
+    Some("i686-pc-windows-msvc")
+}
+
+#[cfg(all(
+    windows,
+    not(any(target_arch = "x86_64", target_arch = "aarch64", target_arch = "x86"))
+))]
+fn windows_target_triple() -> Option<&'static str> {
+    None
+}
+
+#[cfg(windows)]
 fn executable_extension() -> &'static str {
     ".exe"
 }
@@ -138,4 +178,18 @@ fn which_command() -> &'static str {
 #[cfg(not(windows))]
 fn which_command() -> &'static str {
     "which"
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn executable_file_names_include_plain_and_target_specific_windows_names() {
+        let names = executable_file_names("adb");
+
+        assert!(names.contains(&"adb.exe".to_string()));
+        assert!(names.contains(&"adb-x86_64-pc-windows-msvc.exe".to_string()));
+    }
 }
