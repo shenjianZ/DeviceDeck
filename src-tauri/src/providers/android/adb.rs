@@ -283,7 +283,9 @@ pub async fn execute_push_file(
     result.output_path = Some(remote.clone());
     result.stderr = merge_optional_output(
         result.stderr,
-        refresh_android_file_index(adb_path, serial, &remote).await.err(),
+        refresh_android_file_index(adb_path, serial, &remote)
+            .await
+            .err(),
     );
     Ok(result)
 }
@@ -299,32 +301,42 @@ pub async fn execute_key_action(
     match action {
         DeviceKeyAction::ScreenBlack => {
             let primary = vec!["-s", serial, "shell", "cmd", "display", "power-off"];
-            let result =
-                ShellRunner::execute_with_timeout(adb_path, &primary, timeout).await;
+            let result = ShellRunner::execute_with_timeout(adb_path, &primary, timeout).await;
             if let Ok(output) = result {
                 if output.success {
                     return adb_action_result("屏幕已关闭", output);
                 }
             }
             let fallback = vec![
-                "-s", serial, "shell", "settings", "put", "system",
-                "screen_brightness", "0",
+                "-s",
+                serial,
+                "shell",
+                "settings",
+                "put",
+                "system",
+                "screen_brightness",
+                "0",
             ];
             let output = ShellRunner::execute_with_timeout(adb_path, &fallback, timeout).await?;
             adb_action_result("屏幕亮度已调至最低", output)
         }
         DeviceKeyAction::ScreenRestore => {
             let primary = vec!["-s", serial, "shell", "cmd", "display", "power-on"];
-            let result =
-                ShellRunner::execute_with_timeout(adb_path, &primary, timeout).await;
+            let result = ShellRunner::execute_with_timeout(adb_path, &primary, timeout).await;
             if let Ok(output) = result {
                 if output.success {
                     return adb_action_result("屏幕已恢复", output);
                 }
             }
             let fallback = vec![
-                "-s", serial, "shell", "settings", "put", "system",
-                "screen_brightness_mode", "1",
+                "-s",
+                serial,
+                "shell",
+                "settings",
+                "put",
+                "system",
+                "screen_brightness_mode",
+                "1",
             ];
             let output = ShellRunner::execute_with_timeout(adb_path, &fallback, timeout).await?;
             adb_action_result("屏幕亮度已恢复", output)
@@ -353,7 +365,11 @@ pub async fn execute_key_action(
                     vec!["-s", serial, "shell", "input", "keyevent", "VOLUME_DOWN"]
                 }
                 DeviceKeyAction::ExpandNotifications => vec![
-                    "-s", serial, "shell", "cmd", "statusbar",
+                    "-s",
+                    serial,
+                    "shell",
+                    "cmd",
+                    "statusbar",
                     "expand-notifications",
                 ],
                 DeviceKeyAction::CollapseNotifications => {
@@ -463,7 +479,10 @@ async fn refresh_android_file_index(
     if output.success && !command_output_has_adb_error(&output) {
         Ok(())
     } else {
-        Err(format!("文件索引刷新失败: {}", command_output_detail(&output)))
+        Err(format!(
+            "文件索引刷新失败: {}",
+            command_output_detail(&output)
+        ))
     }
 }
 
@@ -623,8 +642,8 @@ mod tests {
 
     #[test]
     fn build_remote_push_target_uses_default_download_directory() {
-        let target = build_remote_push_target(Path::new(r"C:\Users\example\Desktop\demo.apk"), "")
-            .unwrap();
+        let target =
+            build_remote_push_target(Path::new(r"C:\Users\example\Desktop\demo.apk"), "").unwrap();
 
         assert_eq!(target, "/sdcard/Download/DeviceDeck/demo.apk");
     }

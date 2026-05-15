@@ -52,7 +52,11 @@ pub fn run() {
             let log_retention_days = settings.log_retention_days;
 
             let log_bus = Arc::new(LogBus::new(app.handle().clone(), db.clone()));
-            let process_manager = Arc::new(ProcessManager::new(app.handle().clone(), log_bus.clone(), db.clone()));
+            let process_manager = Arc::new(ProcessManager::new(
+                app.handle().clone(),
+                log_bus.clone(),
+                db.clone(),
+            ));
 
             let android_provider = Arc::new(AndroidProvider::new(settings.clone()));
 

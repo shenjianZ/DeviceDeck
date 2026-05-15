@@ -11,9 +11,8 @@ fn configure_existing_sidecars() {
         return;
     };
 
-    let manifest_dir = PathBuf::from(
-        std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".into()),
-    );
+    let manifest_dir =
+        PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".into()));
     let extension = if cfg!(windows) { ".exe" } else { "" };
     let mut external_bin = Vec::new();
     let mut resources = Vec::new();
@@ -46,7 +45,10 @@ fn configure_existing_sidecars() {
     }
 
     if external_bin.is_empty() && resources.is_empty() {
-        println!("cargo:rerun-if-changed={}", manifest_dir.join("binaries").display());
+        println!(
+            "cargo:rerun-if-changed={}",
+            manifest_dir.join("binaries").display()
+        );
         return;
     }
 
@@ -65,9 +67,8 @@ fn configure_existing_sidecars() {
 }
 
 fn sync_dev_binaries() {
-    let manifest_dir = PathBuf::from(
-        std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".into()),
-    );
+    let manifest_dir =
+        PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".into()));
     let source_dir = manifest_dir.join("binaries");
     if !source_dir.is_dir() {
         return;
