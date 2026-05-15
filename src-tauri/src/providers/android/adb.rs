@@ -1,20 +1,15 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use super::parser;
 use super::types::{AndroidDeviceProps, RawDevice, WirelessAdbService};
 use crate::core::error::AppError;
 use crate::core::types::{
-    ConnectionType, DeviceCapability, DeviceInfo, DevicePlatform, DeviceStatus,
+    ConnectionType, DeviceActionResult, DeviceCapability, DeviceInfo, DeviceKeyAction,
+    DevicePlatform, DeviceStatus,
 };
 use crate::sidecar::shell_runner::ShellRunner;
 
-pub async fn execute_adb_version(adb_path: &Path) -> Result<String, AppError> {
-    let output = ShellRunner::execute(adb_path, &["version"]).await?;
-    if !output.success {
-        return Err(AppError::adb_not_found());
-    }
-    Ok(output.stdout.trim().to_string())
-}
+const DEFAULT_PUSH_DIRECTORY: &str = "/sdcard/Download/DeviceDeck";
 
 pub async fn execute_adb_devices(adb_path: &Path) -> Result<Vec<RawDevice>, AppError> {
     let output = ShellRunner::execute(adb_path, &["devices", "-l"]).await?;
@@ -191,6 +186,321 @@ pub async fn execute_adb_pair(
     }
 }
 
+pub async fn execute_screenshot(
+    adb_path: &Path,
+    serial: &str,
+    output_directory: Option<&str>,
+) -> Result<DeviceActionResult, AppError> {
+    validate_device_serial(serial)?;
+    let directory = resolve_output_directory(output_directory)?;
+    tokio::fs::create_dir_all(&directory).await?;
+    let file_name = format!(
+        "DeviceDeck-{}-{}.png",
+        sanitize_file_part(serial),
+        timestamp()
+    );
+    let output_path = directory.join(file_name);
+
+    let output = tokio::time::timeout(
+        std::time::Duration::from_secs(15),
+        tokio::process::Command::new(adb_path)
+            .args(["-s", serial, "exec-out", "screencap", "-p"])
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .output(),
+    )
+    .await
+    .map_err(|_| AppError::internal_error("截图命令执行超时"))?
+    .map_err(|e| AppError::internal_error(&format!("截图命令执行失败: {e}")))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        return Err(AppError::internal_error(&format!(
+            "截图失败: {}",
+            stderr.trim()
+        )));
+    }
+
+    tokio::fs::write(&output_path, output.stdout).await?;
+
+    Ok(DeviceActionResult {
+        message: "截图已保存".into(),
+        output_path: Some(output_path.to_string_lossy().into_owned()),
+        stdout: None,
+        stderr: None,
+    })
+}
+
+pub async fn execute_install_apk(
+    adb_path: &Path,
+    serial: &str,
+    apk_path: &str,
+) -> Result<DeviceActionResult, AppError> {
+    validate_device_serial(serial)?;
+    let apk = PathBuf::from(apk_path);
+    if !apk.is_file() || apk.extension().and_then(|value| value.to_str()) != Some("apk") {
+        return Err(AppError::invalid_config("请选择有效的 .apk 文件"));
+    }
+    let apk_arg = apk.to_string_lossy().into_owned();
+    let output = ShellRunner::execute_with_timeout(
+        adb_path,
+        &["-s", serial, "install", "-r", &apk_arg],
+        std::time::Duration::from_secs(120),
+    )
+    .await?;
+    adb_action_result("APK 安装完成", output)
+}
+
+pub async fn execute_push_file(
+    adb_path: &Path,
+    serial: &str,
+    local_path: &str,
+    remote_directory: &str,
+) -> Result<DeviceActionResult, AppError> {
+    validate_device_serial(serial)?;
+    let local = PathBuf::from(local_path);
+    if !local.is_file() {
+        return Err(AppError::invalid_config("请选择有效的本地文件"));
+    }
+    let remote_directory = normalize_remote_push_directory(remote_directory)?;
+    let mkdir_output = ShellRunner::execute_with_timeout(
+        adb_path,
+        &["-s", serial, "shell", "mkdir", "-p", &remote_directory],
+        std::time::Duration::from_secs(10),
+    )
+    .await?;
+    adb_action_result("远端目录创建完成", mkdir_output)?;
+
+    let remote = build_remote_push_target(&local, remote_directory)?;
+    let local_arg = local.to_string_lossy().into_owned();
+    let output = ShellRunner::execute_with_timeout(
+        adb_path,
+        &["-s", serial, "push", &local_arg, &remote],
+        std::time::Duration::from_secs(120),
+    )
+    .await?;
+    let mut result = adb_action_result("文件已发送", output)?;
+    result.output_path = Some(remote.clone());
+    result.stderr = merge_optional_output(
+        result.stderr,
+        refresh_android_file_index(adb_path, serial, &remote).await.err(),
+    );
+    Ok(result)
+}
+
+pub async fn execute_key_action(
+    adb_path: &Path,
+    serial: &str,
+    action: DeviceKeyAction,
+) -> Result<DeviceActionResult, AppError> {
+    validate_device_serial(serial)?;
+    let args = match action {
+        DeviceKeyAction::Home => vec!["-s", serial, "shell", "input", "keyevent", "HOME"],
+        DeviceKeyAction::Back => vec!["-s", serial, "shell", "input", "keyevent", "BACK"],
+        DeviceKeyAction::AppSwitch => {
+            vec!["-s", serial, "shell", "input", "keyevent", "APP_SWITCH"]
+        }
+        DeviceKeyAction::Menu => vec!["-s", serial, "shell", "input", "keyevent", "MENU"],
+        DeviceKeyAction::Power => vec!["-s", serial, "shell", "input", "keyevent", "POWER"],
+        DeviceKeyAction::VolumeUp => vec!["-s", serial, "shell", "input", "keyevent", "VOLUME_UP"],
+        DeviceKeyAction::VolumeDown => {
+            vec!["-s", serial, "shell", "input", "keyevent", "VOLUME_DOWN"]
+        }
+        DeviceKeyAction::ExpandNotifications => vec![
+            "-s",
+            serial,
+            "shell",
+            "cmd",
+            "statusbar",
+            "expand-notifications",
+        ],
+        DeviceKeyAction::CollapseNotifications => {
+            vec!["-s", serial, "shell", "cmd", "statusbar", "collapse"]
+        }
+        DeviceKeyAction::TurnScreenOff => vec!["-s", serial, "shell", "input", "keyevent", "SLEEP"],
+    };
+    let output =
+        ShellRunner::execute_with_timeout(adb_path, &args, std::time::Duration::from_secs(10))
+            .await?;
+    adb_action_result("快捷操作已执行", output)
+}
+
+pub async fn execute_shell_command(
+    adb_path: &Path,
+    serial: &str,
+    command: &str,
+    timeout_ms: Option<u64>,
+) -> Result<DeviceActionResult, AppError> {
+    validate_device_serial(serial)?;
+    let command = command.trim();
+    if command.is_empty() {
+        return Err(AppError::invalid_config("ADB shell 命令不能为空"));
+    }
+    let timeout =
+        std::time::Duration::from_millis(timeout_ms.unwrap_or(30_000).clamp(1_000, 120_000));
+    let output =
+        ShellRunner::execute_with_timeout(adb_path, &["-s", serial, "shell", command], timeout)
+            .await?;
+    adb_action_result("ADB shell 命令已执行", output)
+}
+
+fn adb_action_result(
+    message: &str,
+    output: crate::sidecar::shell_runner::CommandOutput,
+) -> Result<DeviceActionResult, AppError> {
+    if output.success && !command_output_has_adb_error(&output) {
+        Ok(DeviceActionResult {
+            message: message.into(),
+            output_path: None,
+            stdout: Some(output.stdout.trim().to_string()),
+            stderr: if output.stderr.trim().is_empty() {
+                None
+            } else {
+                Some(output.stderr.trim().to_string())
+            },
+        })
+    } else {
+        let detail = command_output_detail(&output);
+        Err(AppError::internal_error(&format!(
+            "{}: {}",
+            message, detail
+        )))
+    }
+}
+
+fn normalize_remote_push_directory(remote_directory: &str) -> Result<&str, AppError> {
+    let remote_directory = remote_directory.trim();
+    let remote_directory = if remote_directory.is_empty() {
+        DEFAULT_PUSH_DIRECTORY
+    } else {
+        remote_directory.trim_end_matches('/')
+    };
+    if remote_directory.is_empty() {
+        return Err(AppError::invalid_config("远端目录不能为空"));
+    }
+    Ok(remote_directory)
+}
+
+fn build_remote_push_target(local: &Path, remote_directory: &str) -> Result<String, AppError> {
+    let file_name = local
+        .file_name()
+        .and_then(|value| value.to_str())
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError::invalid_config("无法读取本地文件名"))?;
+    let remote_directory = normalize_remote_push_directory(remote_directory)?;
+    Ok(format!("{}/{}", remote_directory, file_name))
+}
+
+async fn refresh_android_file_index(
+    adb_path: &Path,
+    serial: &str,
+    remote_file: &str,
+) -> Result<(), String> {
+    let file_uri = remote_file_uri(remote_file);
+    let output = ShellRunner::execute_with_timeout(
+        adb_path,
+        &[
+            "-s",
+            serial,
+            "shell",
+            "am",
+            "broadcast",
+            "-a",
+            "android.intent.action.MEDIA_SCANNER_SCAN_FILE",
+            "-d",
+            &file_uri,
+        ],
+        std::time::Duration::from_secs(10),
+    )
+    .await
+    .map_err(|error| error.detail.unwrap_or(error.message))?;
+
+    if output.success && !command_output_has_adb_error(&output) {
+        Ok(())
+    } else {
+        Err(format!("文件索引刷新失败: {}", command_output_detail(&output)))
+    }
+}
+
+fn remote_file_uri(remote_file: &str) -> String {
+    let mut uri = String::from("file://");
+    for byte in remote_file.as_bytes() {
+        let ch = *byte as char;
+        if ch.is_ascii_alphanumeric() || matches!(ch, '/' | '-' | '_' | '.' | '~') {
+            uri.push(ch);
+        } else {
+            uri.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    uri
+}
+
+fn merge_optional_output(current: Option<String>, additional: Option<String>) -> Option<String> {
+    match (current, additional) {
+        (Some(current), Some(additional)) if !additional.trim().is_empty() => {
+            Some(format!("{}\n{}", current, additional))
+        }
+        (None, Some(additional)) if !additional.trim().is_empty() => Some(additional),
+        (current, _) => current,
+    }
+}
+
+fn command_output_has_adb_error(output: &crate::sidecar::shell_runner::CommandOutput) -> bool {
+    let combined = format!("{}\n{}", output.stdout, output.stderr).to_lowercase();
+    combined.contains("adb: error:")
+        || combined.contains("error: failed")
+        || combined.contains("failed to ")
+}
+
+fn command_output_detail(output: &crate::sidecar::shell_runner::CommandOutput) -> String {
+    let combined = format!("{}\n{}", output.stdout.trim(), output.stderr.trim());
+    let detail = combined.trim();
+    if detail.is_empty() {
+        "adb 未返回详细错误".into()
+    } else {
+        detail.into()
+    }
+}
+
+fn validate_device_serial(serial: &str) -> Result<(), AppError> {
+    if serial.trim().is_empty() {
+        return Err(AppError::invalid_config("设备序列号不能为空"));
+    }
+    if serial.contains([';', '|', '&', '$', '`', '<', '>', '"', '\'']) {
+        return Err(AppError::invalid_config("设备序列号包含非法字符"));
+    }
+    Ok(())
+}
+
+fn resolve_output_directory(output_directory: Option<&str>) -> Result<PathBuf, AppError> {
+    if let Some(dir) = output_directory
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        return Ok(PathBuf::from(dir));
+    }
+    std::env::current_dir()
+        .map(|dir| dir.join("screenshots"))
+        .map_err(AppError::from)
+}
+
+fn sanitize_file_part(value: &str) -> String {
+    value
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
+                ch
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
+fn timestamp() -> String {
+    chrono::Local::now().format("%Y%m%d-%H%M%S").to_string()
+}
+
 pub fn map_state_to_status(state: &str) -> DeviceStatus {
     match state {
         "device" => DeviceStatus::Online,
@@ -247,5 +557,65 @@ pub fn raw_device_to_info(raw: &RawDevice) -> DeviceInfo {
         screen_size: None,
         battery_level: None,
         capabilities,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::sidecar::shell_runner::CommandOutput;
+
+    #[test]
+    fn build_remote_push_target_appends_file_name_to_directory() {
+        let target = build_remote_push_target(
+            Path::new(r"C:\Users\example\Desktop\example.docx"),
+            "/sdcard/Download/",
+        )
+        .unwrap();
+
+        assert_eq!(target, "/sdcard/Download/example.docx");
+    }
+
+    #[test]
+    fn build_remote_push_target_uses_default_download_directory() {
+        let target = build_remote_push_target(Path::new(r"C:\Users\example\Desktop\demo.apk"), "")
+            .unwrap();
+
+        assert_eq!(target, "/sdcard/Download/DeviceDeck/demo.apk");
+    }
+
+    #[test]
+    fn build_remote_push_target_keeps_devicedeck_directory_without_trailing_slash() {
+        let target = build_remote_push_target(
+            Path::new(r"C:\Users\example\Desktop\demo.docx"),
+            "/sdcard/Download/DeviceDeck",
+        )
+        .unwrap();
+
+        assert_eq!(target, "/sdcard/Download/DeviceDeck/demo.docx");
+    }
+
+    #[test]
+    fn remote_file_uri_percent_encodes_spaces_and_non_ascii_names() {
+        let uri = remote_file_uri("/sdcard/Download/DeviceDeck/example 中文.docx");
+
+        assert_eq!(
+            uri,
+            "file:///sdcard/Download/DeviceDeck/example%20%E4%B8%AD%E6%96%87.docx"
+        );
+    }
+
+    #[test]
+    fn adb_action_result_rejects_adb_error_output_even_with_success_status() {
+        let output = CommandOutput {
+            success: true,
+            stdout: "C:\\Users\\example\\Desktop\\demo.docx: 1 file pushed, 0 skipped".into(),
+            stderr: "adb: error: failed to copy 'demo.docx' to '/sdcard/Download/.': remote couldn't create file: Is a directory".into(),
+        };
+
+        let error = adb_action_result("文件已发送", output).unwrap_err();
+
+        assert_eq!(error.code, "INTERNAL_ERROR");
+        assert!(error.detail.unwrap().contains("adb: error:"));
     }
 }

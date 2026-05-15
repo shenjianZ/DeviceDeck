@@ -3,13 +3,13 @@ use std::sync::Arc;
 use crate::core::error::AppError;
 use crate::core::log_bus::LogBus;
 use crate::core::process_manager::ProcessManager;
+use crate::core::types::AppSettings;
 use crate::core::types::{MirrorConfig, MirrorSession, SessionStatus};
 use crate::providers::android::provider::AndroidProvider;
 use crate::providers::android::scrcpy;
 use crate::providers::provider_trait::DeviceProvider;
 use crate::repositories::session::SessionRepository;
 use crate::sidecar::binary_resolver::BinaryResolver;
-use crate::core::types::AppSettings;
 use uuid::Uuid;
 
 pub struct MirrorService {
@@ -65,13 +65,7 @@ impl MirrorService {
 
         let session = self
             .process_manager
-            .spawn(
-                &session_id,
-                serial,
-                scrcpy_path,
-                args,
-                config.clone(),
-            )
+            .spawn(&session_id, serial, scrcpy_path, args, config.clone())
             .await?;
 
         session_repo.save_session(&session)?;
@@ -145,11 +139,7 @@ impl MirrorService {
             .unwrap_or_default()
             .as_millis() as u64;
 
-        session_repo.update_session_status(
-            session_id,
-            SessionStatus::Stopped,
-            Some(now),
-        )?;
+        session_repo.update_session_status(session_id, SessionStatus::Stopped, Some(now))?;
 
         Ok(())
     }
@@ -170,7 +160,11 @@ impl MirrorService {
             {
                 session.status = SessionStatus::Failed;
                 session.stopped_at = Some(now);
-                session_repo.update_session_status(&session.id, SessionStatus::Failed, Some(now))?;
+                session_repo.update_session_status(
+                    &session.id,
+                    SessionStatus::Failed,
+                    Some(now),
+                )?;
             }
         }
 

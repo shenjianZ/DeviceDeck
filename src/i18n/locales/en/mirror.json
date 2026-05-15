@@ -70,5 +70,40 @@
       "name": "H.265 Max",
       "desc": "Native / 50M / 60fps / H.265"
     }
+  },
+  "recordMode": "Record Mode",
+  "recordFormat": "Record Format",
+  "orientation": "Orientation",
+  "recordDirectory": "Record Directory",
+  "changeDirectory": "Change Directory",
+  "selectDirectory": "Select Directory",
+  "alwaysOnTop": "Always on Top",
+  "alwaysOnTopDesc": "Keep scrcpy window on top when launched",
+  "windowBorderless": "Borderless Window",
+  "windowBorderlessDesc": "Hide scrcpy window decorations",
+  "printFps": "Show FPS",
+  "printFpsDesc": "Output FPS info in runtime logs",
+  "audioEnabled": "Play Phone Audio on PC",
+  "audioEnabledDesc": "Use scrcpy audio forwarding",
+  "audioSource": "Audio Source",
+  "audioCodec": "Audio Codec",
+  "audioDuplicate": "Keep Playing on Phone",
+  "requireAudio": "Require Audio Success",
+  "recordModes": {
+    "off": "Off",
+    "window": "Mirror & Record",
+    "background": "Background Record"
+  },
+  "orientations": {
+    "unlocked": "Follow Device"
+  },
+  "audioSources": {
+    "output": "System Output",
+    "playback": "App Playback",
+    "mic": "Microphone",
+    "mic-camcorder": "Camcorder Mic",
+    "voice-recognition": "Voice Recognition",
+    "voice-communication": "Voice Call",
+    "voice-performance": "Voice Performance"
   }
 }

@@ -1,7 +1,16 @@
 import { create } from "zustand";
 import { tauriApi } from "../lib/tauri";
 import { useNotificationStore } from "./notificationStore";
-import type { DeviceInfo, EnvironmentStatus, AppError, WirelessAdbService } from "../types";
+import { useMirrorStore } from "./mirrorStore";
+import type {
+  DeviceInfo,
+  EnvironmentStatus,
+  AppError,
+  WirelessAdbService,
+  RecommendedConfig,
+  MirrorConfig,
+  DeviceKeyAction,
+} from "../types";
 
 interface DeviceStore {
   devices: DeviceInfo[];
@@ -13,6 +22,9 @@ interface DeviceStore {
   environment: EnvironmentStatus | null;
   error: AppError | null;
   wirelessMessage: string | null;
+  capabilityReports: Record<string, RecommendedConfig[]>;
+  isDetectingCapabilities: boolean;
+  isDeviceActionBusy: boolean;
 
   checkEnvironment: () => Promise<void>;
   scanDevices: (silent?: boolean) => Promise<void>;
@@ -24,6 +36,13 @@ interface DeviceStore {
   pairWirelessDevice: (host: string, port: number, pairingCode: string) => Promise<boolean>;
   disconnectWirelessDevice: (serial: string) => Promise<boolean>;
   clearWirelessMessage: () => void;
+  detectCapabilities: (serial: string) => Promise<void>;
+  applyRecommendedConfig: (serial: string, config: MirrorConfig) => void;
+  takeScreenshot: (serial: string, outputDirectory?: string) => Promise<void>;
+  installApk: (serial: string, apkPath: string) => Promise<void>;
+  pushFile: (serial: string, localPath: string, remoteDirectory: string) => Promise<void>;
+  runKeyAction: (serial: string, action: DeviceKeyAction) => Promise<void>;
+  runShellCommand: (serial: string, command: string) => Promise<void>;
 }
 
 export const useDeviceStore = create<DeviceStore>((set) => ({
@@ -36,6 +55,9 @@ export const useDeviceStore = create<DeviceStore>((set) => ({
   environment: null,
   error: null,
   wirelessMessage: null,
+  capabilityReports: {},
+  isDetectingCapabilities: false,
+  isDeviceActionBusy: false,
 
   checkEnvironment: async () => {
     try {
@@ -167,10 +189,70 @@ export const useDeviceStore = create<DeviceStore>((set) => ({
   },
 
   clearWirelessMessage: () => set({ wirelessMessage: null }),
+
+  detectCapabilities: async (serial) => {
+    set({ isDetectingCapabilities: true, error: null });
+    try {
+      const recommendations = await tauriApi.detectDeviceCapabilities(serial);
+      set((state) => ({
+        capabilityReports: { ...state.capabilityReports, [serial]: recommendations },
+        isDetectingCapabilities: false,
+      }));
+      useNotificationStore.getState().showSuccess("能力检测完成", `设备 ${serial} 的推荐配置已生成`);
+    } catch (e: unknown) {
+      const err = e as AppError;
+      set({ error: err, isDetectingCapabilities: false });
+      useNotificationStore.getState().showError("能力检测失败", err.message, err.suggestion);
+    }
+  },
+
+  applyRecommendedConfig: (_serial, config) => {
+    useMirrorStore.getState().applyPreset(config);
+    useNotificationStore.getState().showSuccess("已应用配置", "推荐配置已应用到投屏参数");
+  },
+
+  takeScreenshot: async (serial, outputDirectory) => {
+    await runDeviceAction(set, () => tauriApi.takeDeviceScreenshot(serial, outputDirectory), "截图完成", "截图失败");
+  },
+
+  installApk: async (serial, apkPath) => {
+    await runDeviceAction(set, () => tauriApi.installDeviceApk(serial, apkPath), "APK 安装完成", "APK 安装失败");
+  },
+
+  pushFile: async (serial, localPath, remoteDirectory) => {
+    await runDeviceAction(set, () => tauriApi.pushDeviceFile(serial, localPath, remoteDirectory), "文件发送完成", "文件发送失败");
+  },
+
+  runKeyAction: async (serial, action) => {
+    await runDeviceAction(set, () => tauriApi.runDeviceKeyAction(serial, action), "快捷操作完成", "快捷操作失败");
+  },
+
+  runShellCommand: async (serial, command) => {
+    await runDeviceAction(set, () => tauriApi.runAdbShellCommand(serial, command), "ADB 命令完成", "ADB 命令失败");
+  },
 }));
 
 function upsertDevice(devices: DeviceInfo[], device: DeviceInfo): DeviceInfo[] {
   const exists = devices.some((item) => item.serial === device.serial);
   if (!exists) return [...devices, device];
   return devices.map((item) => (item.serial === device.serial ? device : item));
+}
+
+async function runDeviceAction(
+  set: (partial: Partial<DeviceStore>) => void,
+  action: () => Promise<{ message: string; outputPath?: string | null; stdout?: string | null }>,
+  successTitle: string,
+  errorTitle: string
+) {
+  set({ isDeviceActionBusy: true, error: null });
+  try {
+    const result = await action();
+    set({ isDeviceActionBusy: false });
+    const detail = result.outputPath || result.stdout || result.message;
+    useNotificationStore.getState().showSuccess(successTitle, detail);
+  } catch (e: unknown) {
+    const err = e as AppError;
+    set({ error: err, isDeviceActionBusy: false });
+    useNotificationStore.getState().showError(errorTitle, err.message, err.suggestion || err.detail || undefined);
+  }
 }

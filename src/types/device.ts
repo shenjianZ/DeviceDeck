@@ -36,3 +36,39 @@ export interface WirelessAdbService {
   port: number;
   serviceType: WirelessAdbServiceType;
 }
+
+export type VideoCodec = "h264" | "h265" | "av1";
+
+export interface DeviceCapabilityReport {
+  serial: string;
+  supportedEncoders: string[];
+  supportedCodecs: VideoCodec[];
+  screenWidth: number | null;
+  screenHeight: number | null;
+  androidVersion: string | null;
+}
+
+export interface RecommendedConfig {
+  label: string;
+  description: string;
+  config: import("./mirror").MirrorConfig;
+}
+
+export interface DeviceActionResult {
+  message: string;
+  outputPath?: string | null;
+  stdout?: string | null;
+  stderr?: string | null;
+}
+
+export type DeviceKeyAction =
+  | "home"
+  | "back"
+  | "appSwitch"
+  | "menu"
+  | "power"
+  | "volumeUp"
+  | "volumeDown"
+  | "expandNotifications"
+  | "collapseNotifications"
+  | "turnScreenOff";

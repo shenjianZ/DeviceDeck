@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { tauriApi } from "../lib/tauri";
 import { useNotificationStore } from "./notificationStore";
 import { applyTheme } from "../lib/theme";
+import { defaultAdvancedMirrorConfig } from "../lib/presets";
 import type { AppSettings, AppError } from "../types";
 
 interface SettingsStore {
@@ -21,6 +22,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   customAdbPath: "",
   customScrcpyPath: "",
   defaultMirrorConfig: {
+    ...defaultAdvancedMirrorConfig(),
     maxSize: "1080",
     videoBitRate: "8M",
     maxFps: "60",

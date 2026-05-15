@@ -1,4 +1,5 @@
 use super::types::{RawDevice, WirelessAdbService, WirelessAdbServiceType};
+use crate::core::types::VideoCodec;
 
 pub fn parse_adb_devices(output: &str) -> Vec<RawDevice> {
     let mut devices = Vec::new();
@@ -23,30 +24,18 @@ pub fn parse_adb_devices(output: &str) -> Vec<RawDevice> {
             .unwrap_or("unknown")
             .to_string();
 
-        let mut product = None;
         let mut model = None;
-        let mut device = None;
-        let mut transport_id = None;
 
         for token in rest.split_whitespace().skip(1) {
-            if let Some(val) = token.strip_prefix("product:") {
-                product = Some(val.to_string());
-            } else if let Some(val) = token.strip_prefix("model:") {
+            if let Some(val) = token.strip_prefix("model:") {
                 model = Some(val.to_string());
-            } else if let Some(val) = token.strip_prefix("device:") {
-                device = Some(val.to_string());
-            } else if let Some(val) = token.strip_prefix("transport_id:") {
-                transport_id = val.parse().ok();
             }
         }
 
         devices.push(RawDevice {
             serial,
             state,
-            product,
             model,
-            device,
-            transport_id,
         });
     }
 
@@ -185,6 +174,69 @@ fn parse_endpoint(token: &str) -> Option<(String, u16)> {
 fn is_ipv4(value: &str) -> bool {
     let parts: Vec<&str> = value.split('.').collect();
     parts.len() == 4 && parts.iter().all(|part| part.parse::<u8>().is_ok())
+}
+
+pub fn parse_scrcpy_encoders(output: &str) -> (Vec<String>, Vec<VideoCodec>) {
+    let mut encoders = Vec::new();
+    let mut codec_set = std::collections::HashSet::new();
+
+    for line in output.lines() {
+        let line = line.trim();
+        if let Some(idx) = line.find("--video-codec=") {
+            let rest = &line[idx + "--video-codec=".len()..];
+            let tag = rest
+                .split_whitespace()
+                .next()
+                .unwrap_or("")
+                .trim_end_matches(',');
+            if let Some(codec) = parse_video_codec_tag(tag) {
+                codec_set.insert(codec);
+            }
+            if let Some(name) = rest.split_whitespace().nth(1) {
+                let name = name.trim_end_matches(',');
+                if !name.is_empty() {
+                    encoders.push(name.to_string());
+                }
+            }
+        }
+    }
+
+    let mut codecs: Vec<VideoCodec> = codec_set.into_iter().collect();
+    codecs.sort_by(|a, b| {
+        let order = |c: &VideoCodec| match c {
+            VideoCodec::Av1 => 0,
+            VideoCodec::H265 => 1,
+            VideoCodec::H264 => 2,
+        };
+        order(a).cmp(&order(b))
+    });
+
+    (encoders, codecs)
+}
+
+pub fn parse_video_codec_tag(tag: &str) -> Option<VideoCodec> {
+    match tag {
+        "h264" => Some(VideoCodec::H264),
+        "h265" => Some(VideoCodec::H265),
+        "av1" => Some(VideoCodec::Av1),
+        _ => None,
+    }
+}
+
+pub fn parse_screen_resolution(s: &str) -> Option<(u32, u32)> {
+    let parts: Vec<&str> = s.split(" × ").collect();
+    if parts.len() == 2 {
+        let w = parts[0].trim().parse::<u32>().ok()?;
+        let h = parts[1].trim().parse::<u32>().ok()?;
+        return Some((w, h));
+    }
+    let parts: Vec<&str> = s.split('x').collect();
+    if parts.len() == 2 {
+        let w = parts[0].trim().parse::<u32>().ok()?;
+        let h = parts[1].trim().parse::<u32>().ok()?;
+        return Some((w, h));
+    }
+    None
 }
 
 #[cfg(test)]

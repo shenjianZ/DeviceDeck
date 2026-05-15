@@ -50,8 +50,10 @@ impl<'a> LogRepository<'a> {
                 Ok(AppLog {
                     id: row.get(0)?,
                     time: row.get(1)?,
-                    source: serde_json::from_str(&source_str).unwrap_or(crate::core::types::LogSource::System),
-                    level: serde_json::from_str(&level_str).unwrap_or(crate::core::types::LogLevel::Info),
+                    source: serde_json::from_str(&source_str)
+                        .unwrap_or(crate::core::types::LogSource::System),
+                    level: serde_json::from_str(&level_str)
+                        .unwrap_or(crate::core::types::LogLevel::Info),
                     device_serial: row.get(4)?,
                     message: row.get(5)?,
                 })

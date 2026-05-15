@@ -1,5 +1,5 @@
-pub mod provider;
 pub mod adb;
-pub mod scrcpy;
 pub mod parser;
+pub mod provider;
+pub mod scrcpy;
 pub mod types;

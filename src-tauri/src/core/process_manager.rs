@@ -101,7 +101,15 @@ impl ProcessManager {
                 tokio::spawn(async move {
                     let mut lines = BufReader::new(stream).lines();
                     while let Ok(Some(line)) = lines.next_line().await {
-                        bus.scrcpy_error(&serial, &line);
+                        let upper = line.to_uppercase();
+                        if upper.contains("ERROR:")
+                            || upper.contains("FATAL:")
+                            || upper.contains("FAILED")
+                        {
+                            bus.scrcpy_error(&serial, &line);
+                        } else {
+                            bus.scrcpy_info(&serial, &line);
+                        }
                     }
                 })
             });
@@ -203,9 +211,9 @@ async fn kill_process_tree(pid: u32) -> Result<(), AppError> {
     if output.status.success() {
         Ok(())
     } else {
-        Err(AppError::mirror_stop_failed(
-            &String::from_utf8_lossy(&output.stderr),
-        ))
+        Err(AppError::mirror_stop_failed(&String::from_utf8_lossy(
+            &output.stderr,
+        )))
     }
 }
 
@@ -220,9 +228,9 @@ async fn kill_process_tree(pid: u32) -> Result<(), AppError> {
     if output.status.success() {
         Ok(())
     } else {
-        Err(AppError::mirror_stop_failed(
-            &String::from_utf8_lossy(&output.stderr),
-        ))
+        Err(AppError::mirror_stop_failed(&String::from_utf8_lossy(
+            &output.stderr,
+        )))
     }
 }
 

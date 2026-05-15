@@ -4,10 +4,7 @@ use serde::{Deserialize, Serialize};
 pub struct RawDevice {
     pub serial: String,
     pub state: String,
-    pub product: Option<String>,
     pub model: Option<String>,
-    pub device: Option<String>,
-    pub transport_id: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

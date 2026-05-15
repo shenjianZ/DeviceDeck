@@ -1,4 +1,4 @@
-import type { MirrorPreset } from "../types";
+import type { MirrorConfig, MirrorPreset } from "../types";
 
 type TFn = (key: string) => string;
 
@@ -6,6 +6,7 @@ export const PRESET_CONFIGS: Omit<MirrorPreset, "name" | "description">[] = [
   {
     id: "smooth",
     config: {
+      ...defaultAdvancedMirrorConfig(),
       maxSize: "720",
       videoBitRate: "4M",
       maxFps: "60",
@@ -18,6 +19,7 @@ export const PRESET_CONFIGS: Omit<MirrorPreset, "name" | "description">[] = [
   {
     id: "hd",
     config: {
+      ...defaultAdvancedMirrorConfig(),
       maxSize: "1080",
       videoBitRate: "8M",
       maxFps: "60",
@@ -30,6 +32,7 @@ export const PRESET_CONFIGS: Omit<MirrorPreset, "name" | "description">[] = [
   {
     id: "ultra",
     config: {
+      ...defaultAdvancedMirrorConfig(),
       maxSize: "native",
       videoBitRate: "32M",
       maxFps: "60",
@@ -42,6 +45,7 @@ export const PRESET_CONFIGS: Omit<MirrorPreset, "name" | "description">[] = [
   {
     id: "h265-max",
     config: {
+      ...defaultAdvancedMirrorConfig(),
       maxSize: "native",
       videoBitRate: "50M",
       maxFps: "60",
@@ -52,6 +56,37 @@ export const PRESET_CONFIGS: Omit<MirrorPreset, "name" | "description">[] = [
     },
   },
 ];
+
+export function defaultAdvancedMirrorConfig(): Pick<
+  MirrorConfig,
+  | "recordMode"
+  | "recordFormat"
+  | "recordDirectory"
+  | "alwaysOnTop"
+  | "windowBorderless"
+  | "printFps"
+  | "orientation"
+  | "audioEnabled"
+  | "audioSource"
+  | "audioCodec"
+  | "audioDuplicate"
+  | "requireAudio"
+> {
+  return {
+    recordMode: "off",
+    recordFormat: "mp4",
+    recordDirectory: "",
+    alwaysOnTop: false,
+    windowBorderless: false,
+    printFps: false,
+    orientation: "unlocked",
+    audioEnabled: true,
+    audioSource: "output",
+    audioCodec: "opus",
+    audioDuplicate: false,
+    requireAudio: false,
+  };
+}
 
 const PRESET_NAMES: Record<string, string> = {
   smooth: "presets.smooth.name",
@@ -166,10 +201,10 @@ export function getPageTitles(t: TFn): Record<string, string> {
 
 // Legacy static exports for backward compatibility (used by SettingsPage OPT_* imports)
 export const OPT_RES = OPT_RES_VALUES.map((o): { value: string; label: string } =>
-  "labelKey" in o ? { value: o.value, label: o.value === "native" ? "原生" : o.value } : o
+  "labelKey" in o ? { value: o.value, label: o.value === "native" ? "Native" : o.value } : o
 );
 export const OPT_CODEC = [
-  { value: "h264", label: "H.264 兼容" },
-  { value: "h265", label: "H.265 高画质" },
+  { value: "h264", label: "H.264" },
+  { value: "h265", label: "H.265" },
   { value: "av1", label: "AV1" },
 ];

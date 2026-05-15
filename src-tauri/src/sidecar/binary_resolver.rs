@@ -86,9 +86,7 @@ impl BinaryResolver {
                 let Some(file_name) = path.file_name().and_then(|value| value.to_str()) else {
                     return false;
                 };
-                file_name.starts_with(&prefix)
-                    && file_name.ends_with(extension)
-                    && path.is_file()
+                file_name.starts_with(&prefix) && file_name.ends_with(extension) && path.is_file()
             })
     }
 

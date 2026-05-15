@@ -8,6 +8,9 @@ import type {
   AppSettings,
   AppLog,
   WirelessAdbService,
+  RecommendedConfig,
+  DeviceActionResult,
+  DeviceKeyAction,
 } from "../types";
 
 /** 分页查询结果 */
@@ -37,6 +40,18 @@ export const tauriApi = {
     invoke<string>("pair_wireless_device", { host, port, pairingCode }),
   disconnectWirelessDevice: (serial: string) =>
     invoke<void>("disconnect_wireless_device", { serial }),
+  detectDeviceCapabilities: (serial: string) =>
+    invoke<RecommendedConfig[]>("detect_device_capabilities", { serial }),
+  takeDeviceScreenshot: (serial: string, outputDirectory?: string) =>
+    invoke<DeviceActionResult>("take_device_screenshot", { serial, outputDirectory }),
+  installDeviceApk: (serial: string, apkPath: string) =>
+    invoke<DeviceActionResult>("install_device_apk", { serial, apkPath }),
+  pushDeviceFile: (serial: string, localPath: string, remoteDirectory: string) =>
+    invoke<DeviceActionResult>("push_device_file", { serial, localPath, remoteDirectory }),
+  runDeviceKeyAction: (serial: string, action: DeviceKeyAction) =>
+    invoke<DeviceActionResult>("run_device_key_action", { serial, action }),
+  runAdbShellCommand: (serial: string, command: string, timeoutMs = 30000) =>
+    invoke<DeviceActionResult>("run_adb_shell_command", { serial, command, timeoutMs }),
 
   // Mirror
   startMirror: (serial: string, config: MirrorConfig) =>

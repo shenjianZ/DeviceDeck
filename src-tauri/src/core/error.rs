@@ -44,8 +44,7 @@ impl AppError {
     }
 
     pub fn device_not_found(serial: &str) -> Self {
-        Self::new("DEVICE_NOT_FOUND", "设备未找到")
-            .with_detail(serial)
+        Self::new("DEVICE_NOT_FOUND", "设备未找到").with_detail(serial)
     }
 
     pub fn device_unauthorized(serial: &str) -> Self {
@@ -61,18 +60,15 @@ impl AppError {
     }
 
     pub fn mirror_already_running(serial: &str) -> Self {
-        Self::new("MIRROR_ALREADY_RUNNING", "该设备已有运行中的投屏会话")
-            .with_detail(serial)
+        Self::new("MIRROR_ALREADY_RUNNING", "该设备已有运行中的投屏会话").with_detail(serial)
     }
 
     pub fn mirror_start_failed(reason: &str) -> Self {
-        Self::new("MIRROR_START_FAILED", "投屏启动失败")
-            .with_detail(reason)
+        Self::new("MIRROR_START_FAILED", "投屏启动失败").with_detail(reason)
     }
 
     pub fn mirror_stop_failed(reason: &str) -> Self {
-        Self::new("MIRROR_STOP_FAILED", "投屏停止失败")
-            .with_detail(reason)
+        Self::new("MIRROR_STOP_FAILED", "投屏停止失败").with_detail(reason)
     }
 
     pub fn wireless_connect_failed(reason: &str) -> Self {
@@ -94,24 +90,21 @@ impl AppError {
     }
 
     pub fn invalid_config(reason: &str) -> Self {
-        Self::new("INVALID_CONFIG", "无效的配置参数")
-            .with_detail(reason)
+        Self::new("INVALID_CONFIG", "无效的配置参数").with_detail(reason)
     }
 
     pub fn invalid_tool_path(path: &str) -> Self {
-        Self::new("INVALID_TOOL_PATH", "无效的工具路径")
-            .with_detail(path)
+        Self::new("INVALID_TOOL_PATH", "无效的工具路径").with_detail(path)
     }
 
-    pub fn provider_not_implemented(platform: &str) -> Self {
-        Self::new("PROVIDER_NOT_IMPLEMENTED", "该平台暂未实现")
-            .with_detail(platform)
-            .with_suggestion("Coming Soon")
+    pub fn capability_detection_failed(reason: &str) -> Self {
+        Self::new("CAPABILITY_DETECTION_FAILED", "设备能力检测失败")
+            .with_detail(reason)
+            .with_suggestion("请确认设备已连接且 scrcpy 版本支持 --list-encoders")
     }
 
     pub fn internal_error(reason: &str) -> Self {
-        Self::new("INTERNAL_ERROR", "内部错误")
-            .with_detail(reason)
+        Self::new("INTERNAL_ERROR", "内部错误").with_detail(reason)
     }
 }
 

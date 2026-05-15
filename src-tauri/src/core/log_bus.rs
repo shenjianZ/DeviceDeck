@@ -17,13 +17,7 @@ impl LogBus {
         Self { app_handle, db }
     }
 
-    pub fn emit_log(
-        &self,
-        source: LogSource,
-        level: LogLevel,
-        device_serial: &str,
-        message: &str,
-    ) {
+    pub fn emit_log(&self, source: LogSource, level: LogLevel, device_serial: &str, message: &str) {
         let log = AppLog {
             id: Uuid::new_v4().to_string(),
             time: now_millis(),
@@ -47,16 +41,8 @@ impl LogBus {
         self.emit_log(LogSource::System, LogLevel::Info, "", message);
     }
 
-    pub fn system_error(&self, message: &str) {
-        self.emit_log(LogSource::System, LogLevel::Error, "", message);
-    }
-
     pub fn adb_info(&self, device_serial: &str, message: &str) {
         self.emit_log(LogSource::Adb, LogLevel::Info, device_serial, message);
-    }
-
-    pub fn adb_error(&self, device_serial: &str, message: &str) {
-        self.emit_log(LogSource::Adb, LogLevel::Error, device_serial, message);
     }
 
     pub fn scrcpy_info(&self, device_serial: &str, message: &str) {

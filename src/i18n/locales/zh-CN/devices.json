@@ -21,5 +21,33 @@
   "usbToWifiMirror": "USB 切 WiFi 并投屏",
   "deviceOffline": "设备不在线，无法投屏",
   "wireless": "无线调试",
-  "disconnect": "断开连接"
+  "disconnect": "断开连接",
+  "capability": {
+    "detect": "检测设备能力",
+    "detecting": "检测中...",
+    "recommendedConfigs": "推荐配置",
+    "recommended": "推荐配置",
+    "recommendedDesc": "画质与性能的最佳平衡",
+    "highQuality": "高质量配置",
+    "highQualityDesc": "设备支持的最高画质",
+    "lowLatency": "低延迟配置",
+    "lowLatencyDesc": "优化响应速度",
+    "applied": "已应用配置"
+  },
+  "deviceTools": "设备工具",
+  "screenshot": "截图",
+  "installApk": "安装 APK",
+  "pushFile": "发送文件",
+  "execute": "执行",
+  "keyActions": {
+    "home": "主屏",
+    "back": "返回",
+    "appSwitch": "多任务",
+    "power": "电源",
+    "volumeUp": "音量+",
+    "volumeDown": "音量-",
+    "expandNotifications": "通知栏",
+    "collapseNotifications": "收起",
+    "turnScreenOff": "息屏"
+  }
 }

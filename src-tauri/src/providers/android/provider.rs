@@ -1,14 +1,13 @@
-use std::path::Path;
-
 use async_trait::async_trait;
-use uuid::Uuid;
 
 use super::adb;
+use super::parser;
 use super::scrcpy;
+use crate::config::APP_VERSION;
 use crate::core::error::AppError;
 use crate::core::types::{
-    AppSettings, DeviceInfo, DevicePlatform, DeviceStatus, EnvironmentStatus, MirrorConfig,
-    MirrorSession, SessionStatus, ToolStatus,
+    AppSettings, DeviceActionResult, DeviceCapabilityReport, DeviceInfo, DeviceKeyAction,
+    DeviceStatus, EnvironmentStatus, RecommendedConfig, ToolStatus,
 };
 use crate::providers::android::types::WirelessAdbService;
 use crate::providers::provider_trait::DeviceProvider;
@@ -100,6 +99,82 @@ impl AndroidProvider {
         let adb_path = self.resolve_adb()?;
         adb::execute_adb_disconnect(&adb_path, serial).await
     }
+
+    pub async fn detect_capabilities(
+        &self,
+        serial: &str,
+    ) -> Result<Vec<RecommendedConfig>, AppError> {
+        let scrcpy_path = self.resolve_scrcpy()?;
+        let adb_path = self.resolve_adb()?;
+
+        let (encoders, codecs) = scrcpy::execute_list_encoders(&scrcpy_path, serial).await?;
+
+        let props = adb::execute_get_device_props(&adb_path, serial).await?;
+
+        let (screen_width, screen_height) = props
+            .screen_size
+            .as_deref()
+            .and_then(parser::parse_screen_resolution)
+            .unzip();
+
+        let report = DeviceCapabilityReport {
+            serial: serial.into(),
+            supported_encoders: encoders,
+            supported_codecs: codecs,
+            screen_width,
+            screen_height,
+            android_version: Some(props.android_version),
+        };
+
+        Ok(scrcpy::generate_recommendations(&report))
+    }
+
+    pub async fn take_screenshot(
+        &self,
+        serial: &str,
+        output_directory: Option<&str>,
+    ) -> Result<DeviceActionResult, AppError> {
+        let adb_path = self.resolve_adb()?;
+        adb::execute_screenshot(&adb_path, serial, output_directory).await
+    }
+
+    pub async fn install_apk(
+        &self,
+        serial: &str,
+        apk_path: &str,
+    ) -> Result<DeviceActionResult, AppError> {
+        let adb_path = self.resolve_adb()?;
+        adb::execute_install_apk(&adb_path, serial, apk_path).await
+    }
+
+    pub async fn push_file(
+        &self,
+        serial: &str,
+        local_path: &str,
+        remote_directory: &str,
+    ) -> Result<DeviceActionResult, AppError> {
+        let adb_path = self.resolve_adb()?;
+        adb::execute_push_file(&adb_path, serial, local_path, remote_directory).await
+    }
+
+    pub async fn run_key_action(
+        &self,
+        serial: &str,
+        action: DeviceKeyAction,
+    ) -> Result<DeviceActionResult, AppError> {
+        let adb_path = self.resolve_adb()?;
+        adb::execute_key_action(&adb_path, serial, action).await
+    }
+
+    pub async fn run_shell_command(
+        &self,
+        serial: &str,
+        command: &str,
+        timeout_ms: Option<u64>,
+    ) -> Result<DeviceActionResult, AppError> {
+        let adb_path = self.resolve_adb()?;
+        adb::execute_shell_command(&adb_path, serial, command, timeout_ms).await
+    }
 }
 
 fn validate_wireless_host(host: &str) -> Result<(), AppError> {
@@ -132,10 +207,6 @@ fn validate_wireless_port(port: u16) -> Result<(), AppError> {
 
 #[async_trait]
 impl DeviceProvider for AndroidProvider {
-    fn platform(&self) -> DevicePlatform {
-        DevicePlatform::Android
-    }
-
     async fn check_environment(&self) -> Result<EnvironmentStatus, AppError> {
         let adb_status = match self.resolve_adb() {
             Ok(path) => {
@@ -216,7 +287,7 @@ impl DeviceProvider for AndroidProvider {
         Ok(EnvironmentStatus {
             adb: adb_status,
             scrcpy: scrcpy_status,
-            provider_status: "运行中".into(),
+            provider_status: format!("运行中 v{APP_VERSION}"),
         })
     }
 
@@ -279,52 +350,5 @@ impl DeviceProvider for AndroidProvider {
         }
 
         Ok(info)
-    }
-
-    async fn start_mirror(
-        &self,
-        serial: &str,
-        config: &MirrorConfig,
-        scrcpy_path: &Path,
-    ) -> Result<MirrorSession, AppError> {
-        let args = scrcpy::build_scrcpy_args(serial, config)?;
-
-        let session_id = Uuid::new_v4().to_string();
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as u64;
-
-        let mut child = tokio::process::Command::new(scrcpy_path)
-            .args(&args)
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .spawn()
-            .map_err(|e| AppError::mirror_start_failed(&e.to_string()))?;
-
-        let pid = child.id();
-
-        let sid = session_id.clone();
-        let s = serial.to_string();
-        tokio::spawn(async move {
-            let _ = child.wait().await;
-        });
-
-        Ok(MirrorSession {
-            id: session_id,
-            device_serial: serial.into(),
-            platform: "android".into(),
-            process_id: pid,
-            status: SessionStatus::Running,
-            started_at: now,
-            stopped_at: None,
-            config: config.clone(),
-        })
-    }
-
-    async fn stop_mirror(&self, session_id: &str) -> Result<(), AppError> {
-        // The ProcessManager handles actual process killing
-        // This is a placeholder that the service layer will use
-        Ok(())
     }
 }

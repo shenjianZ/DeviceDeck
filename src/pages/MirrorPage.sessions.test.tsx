@@ -3,10 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import '../i18n'
 import { useDeviceStore } from '../stores/deviceStore'
 import { useMirrorStore } from '../stores/mirrorStore'
+import { defaultAdvancedMirrorConfig } from '../lib/presets'
 import { MirrorPage } from './MirrorPage'
 import type { MirrorSession } from '../types'
 
 const baseConfig = {
+  ...defaultAdvancedMirrorConfig(),
   maxSize: '1080',
   videoBitRate: '8M',
   maxFps: '60',

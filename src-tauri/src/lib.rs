@@ -10,16 +10,18 @@ use std::sync::Arc;
 
 use tauri::Manager;
 
-use core::app_state::AppState;
 use core::log_bus::LogBus;
 use core::process_manager::ProcessManager;
 use providers::android::provider::AndroidProvider;
 use repositories::database::Database;
+use repositories::log::LogRepository;
 use repositories::settings::SettingsRepository;
 use services::device::DeviceService;
 use services::environment::EnvironmentService;
 use services::mirror::MirrorService;
 use services::settings::SettingsService;
+
+use core::app_state::AppState;
 
 const AUTOSTART_HIDDEN_ARG: &str = "--devicedeck-start-hidden";
 
@@ -39,6 +41,7 @@ pub fn run() {
             Some(vec![AUTOSTART_HIDDEN_ARG]),
         ))
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_dialog::init())
         .setup(move |app| {
             let data_dir = app.path().app_data_dir().expect("无法获取 app data 目录");
 
@@ -46,6 +49,7 @@ pub fn run() {
 
             let settings_repo = SettingsRepository::new(&data_dir);
             let settings = settings_repo.load().unwrap_or_default();
+            let log_retention_days = settings.log_retention_days;
 
             let log_bus = Arc::new(LogBus::new(app.handle().clone(), db.clone()));
             let process_manager = Arc::new(ProcessManager::new(log_bus.clone(), db.clone()));
@@ -56,13 +60,13 @@ pub fn run() {
             let device_service = DeviceService::new(android_provider.clone());
             let mirror_service = MirrorService::new(
                 android_provider.clone(),
-                process_manager,
+                process_manager.clone(),
                 log_bus.clone(),
                 settings,
             );
             let settings_service = SettingsService::new(settings_repo);
 
-            let app_state = AppState::new(db, log_bus);
+            let app_state = AppState::new(db.clone());
 
             app.manage(app_state);
             app.manage(android_provider.clone());
@@ -70,6 +74,26 @@ pub fn run() {
             app.manage(device_service);
             app.manage(mirror_service);
             app.manage(settings_service);
+
+            // 启动时清理旧日志
+            let log_repo = LogRepository::new(&db);
+            if let Err(e) = log_repo.cleanup_old_logs(log_retention_days) {
+                eprintln!("清理旧日志失败: {e}");
+            }
+
+            // 启动日志
+            log_bus.system_info(&format!("DeviceDeck v{} 启动", config::APP_VERSION));
+
+            // 窗口关闭时杀掉所有 scrcpy 进程
+            if let Some(window) = app.get_webview_window("main") {
+                let pm = process_manager.clone();
+                window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { .. } = event {
+                        let pm = pm.clone();
+                        tokio::spawn(async move { pm.kill_all().await });
+                    }
+                });
+            }
 
             if start_hidden {
                 if let Some(window) = app.get_webview_window("main") {
@@ -88,6 +112,12 @@ pub fn run() {
             commands::device::discover_wireless_devices,
             commands::device::pair_wireless_device,
             commands::device::disconnect_wireless_device,
+            commands::device::detect_device_capabilities,
+            commands::device::take_device_screenshot,
+            commands::device::install_device_apk,
+            commands::device::push_device_file,
+            commands::device::run_device_key_action,
+            commands::device::run_adb_shell_command,
             commands::mirror::start_mirror,
             commands::mirror::start_wireless_mirror,
             commands::mirror::connect_wireless_and_start_mirror,

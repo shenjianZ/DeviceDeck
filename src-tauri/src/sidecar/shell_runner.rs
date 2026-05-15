@@ -33,9 +33,7 @@ impl ShellRunner {
         )
         .await
         .map_err(|_| AppError::internal_error("命令执行超时"))?
-        .map_err(|e| {
-            AppError::internal_error(&format!("命令执行失败: {e}"))
-        })?;
+        .map_err(|e| AppError::internal_error(&format!("命令执行失败: {e}")))?;
 
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();

@@ -1,5 +1,5 @@
 use crate::core::error::AppError;
-use crate::core::types::DeviceInfo;
+use crate::core::types::{DeviceActionResult, DeviceInfo, DeviceKeyAction, RecommendedConfig};
 use crate::providers::android::types::WirelessAdbService;
 use crate::services::device::DeviceService;
 
@@ -61,4 +61,65 @@ pub async fn disconnect_wireless_device(
     serial: String,
 ) -> Result<(), AppError> {
     device_service.disconnect_wireless_device(&serial).await
+}
+
+#[tauri::command]
+pub async fn detect_device_capabilities(
+    device_service: tauri::State<'_, DeviceService>,
+    serial: String,
+) -> Result<Vec<RecommendedConfig>, AppError> {
+    device_service.detect_capabilities(&serial).await
+}
+
+#[tauri::command]
+pub async fn take_device_screenshot(
+    device_service: tauri::State<'_, DeviceService>,
+    serial: String,
+    output_directory: Option<String>,
+) -> Result<DeviceActionResult, AppError> {
+    device_service
+        .take_screenshot(&serial, output_directory.as_deref())
+        .await
+}
+
+#[tauri::command]
+pub async fn install_device_apk(
+    device_service: tauri::State<'_, DeviceService>,
+    serial: String,
+    apk_path: String,
+) -> Result<DeviceActionResult, AppError> {
+    device_service.install_apk(&serial, &apk_path).await
+}
+
+#[tauri::command]
+pub async fn push_device_file(
+    device_service: tauri::State<'_, DeviceService>,
+    serial: String,
+    local_path: String,
+    remote_directory: String,
+) -> Result<DeviceActionResult, AppError> {
+    device_service
+        .push_file(&serial, &local_path, &remote_directory)
+        .await
+}
+
+#[tauri::command]
+pub async fn run_device_key_action(
+    device_service: tauri::State<'_, DeviceService>,
+    serial: String,
+    action: DeviceKeyAction,
+) -> Result<DeviceActionResult, AppError> {
+    device_service.run_key_action(&serial, action).await
+}
+
+#[tauri::command]
+pub async fn run_adb_shell_command(
+    device_service: tauri::State<'_, DeviceService>,
+    serial: String,
+    command: String,
+    timeout_ms: Option<u64>,
+) -> Result<DeviceActionResult, AppError> {
+    device_service
+        .run_shell_command(&serial, &command, timeout_ms)
+        .await
 }

@@ -21,5 +21,33 @@
   "usbToWifiMirror": "USB to WiFi & Mirror",
   "deviceOffline": "Device is offline, cannot mirror",
   "wireless": "Wireless Debug",
-  "disconnect": "Disconnect"
+  "disconnect": "Disconnect",
+  "capability": {
+    "detect": "Detect Capabilities",
+    "detecting": "Detecting...",
+    "recommendedConfigs": "Recommended Configs",
+    "recommended": "Recommended",
+    "recommendedDesc": "Best balance of quality and performance",
+    "highQuality": "High Quality",
+    "highQualityDesc": "Maximum quality your device supports",
+    "lowLatency": "Low Latency",
+    "lowLatencyDesc": "Optimized for responsiveness",
+    "applied": "Config applied"
+  },
+  "deviceTools": "Device Tools",
+  "screenshot": "Screenshot",
+  "installApk": "Install APK",
+  "pushFile": "Push File",
+  "execute": "Run",
+  "keyActions": {
+    "home": "Home",
+    "back": "Back",
+    "appSwitch": "Recents",
+    "power": "Power",
+    "volumeUp": "Vol+",
+    "volumeDown": "Vol-",
+    "expandNotifications": "Notifications",
+    "collapseNotifications": "Collapse",
+    "turnScreenOff": "Screen Off"
+  }
 }

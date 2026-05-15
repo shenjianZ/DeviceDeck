@@ -70,5 +70,40 @@
       "name": "H.265 极致",
       "desc": "原生 / 50M / 60fps / H.265"
     }
+  },
+  "recordMode": "录制模式",
+  "recordFormat": "录制格式",
+  "orientation": "方向",
+  "recordDirectory": "录制目录",
+  "changeDirectory": "更改目录",
+  "selectDirectory": "选择目录",
+  "alwaysOnTop": "窗口置顶",
+  "alwaysOnTopDesc": "启动 scrcpy 时保持窗口在最前",
+  "windowBorderless": "无边框窗口",
+  "windowBorderlessDesc": "隐藏 scrcpy 窗口装饰",
+  "printFps": "显示 FPS",
+  "printFpsDesc": "在运行日志中输出帧率信息",
+  "audioEnabled": "电脑播放手机声音",
+  "audioEnabledDesc": "使用 scrcpy 音频转发",
+  "audioSource": "音频来源",
+  "audioCodec": "音频编码",
+  "audioDuplicate": "保留手机播放",
+  "requireAudio": "要求音频成功",
+  "recordModes": {
+    "off": "不录制",
+    "window": "投屏并录制",
+    "background": "后台录制"
+  },
+  "orientations": {
+    "unlocked": "跟随设备"
+  },
+  "audioSources": {
+    "output": "系统输出",
+    "playback": "应用播放",
+    "mic": "麦克风",
+    "mic-camcorder": "摄像麦克风",
+    "voice-recognition": "语音识别",
+    "voice-communication": "语音通话",
+    "voice-performance": "语音演出"
   }
 }

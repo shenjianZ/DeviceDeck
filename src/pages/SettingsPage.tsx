@@ -22,6 +22,7 @@ import { Dropdown } from "../components/ui/Dropdown";
 import { Badge } from "../components/ui/Badge";
 import { OPT_BR, OPT_FPS, getOptCodec, getOptRes, getPresets } from "../lib/presets";
 import type { MirrorConfig } from "../types";
+import { open } from "@tauri-apps/plugin-dialog";
 
 const FONT_SIZE_OPTIONS = [
   { value: "12", label: "12 px" },
@@ -29,6 +30,48 @@ const FONT_SIZE_OPTIONS = [
   { value: "14", label: "14 px" },
   { value: "15", label: "15 px" },
   { value: "16", label: "16 px" },
+];
+
+function getRecordModeOptions(t: (key: string) => string) {
+  return [
+    { value: "off", label: t("mirror:recordModes.off") },
+    { value: "window", label: t("mirror:recordModes.window") },
+    { value: "background", label: t("mirror:recordModes.background") },
+  ];
+}
+
+const RECORD_FORMAT_OPTIONS = [
+  { value: "mp4", label: "MP4" },
+  { value: "mkv", label: "MKV" },
+];
+
+function getOrientationOptions(t: (key: string) => string) {
+  return [
+    { value: "unlocked", label: t("mirror:orientations.unlocked") },
+    { value: "0", label: "0°" },
+    { value: "90", label: "90°" },
+    { value: "180", label: "180°" },
+    { value: "270", label: "270°" },
+  ];
+}
+
+function getAudioSourceOptions(t: (key: string) => string) {
+  return [
+    { value: "output", label: t("mirror:audioSources.output") },
+    { value: "playback", label: t("mirror:audioSources.playback") },
+    { value: "mic", label: t("mirror:audioSources.mic") },
+    { value: "mic-camcorder", label: t("mirror:audioSources.mic-camcorder") },
+    { value: "voice-recognition", label: t("mirror:audioSources.voice-recognition") },
+    { value: "voice-communication", label: t("mirror:audioSources.voice-communication") },
+    { value: "voice-performance", label: t("mirror:audioSources.voice-performance") },
+  ];
+}
+
+const AUDIO_CODEC_OPTIONS = [
+  { value: "opus", label: "Opus" },
+  { value: "aac", label: "AAC" },
+  { value: "flac", label: "FLAC" },
+  { value: "raw", label: "Raw" },
 ];
 
 export function SettingsPage() {
@@ -45,6 +88,10 @@ export function SettingsPage() {
   const installUpdate = useUpdaterStore((s) => s.installUpdate);
 
   const [activeSection, setActiveSection] = useState(0);
+
+  const recordModeOptions = getRecordModeOptions(t);
+  const orientationOptions = getOrientationOptions(t);
+  const audioSourceOptions = getAudioSourceOptions(t);
 
   const settingsMenu = [
     { label: t("settings:menu.appearance"), icon: Palette },
@@ -262,6 +309,12 @@ export function SettingsPage() {
         updateSetting("defaultMirrorConfig", { ...settings.defaultMirrorConfig, ...patch });
         updateMirrorConfig(patch);
       };
+      const chooseRecordDirectory = async () => {
+        const selected = await open({ directory: true, multiple: false });
+        if (typeof selected === "string") {
+          updateDefaultConfig({ recordDirectory: selected });
+        }
+      };
       const applyDefaultPreset = (config: MirrorConfig) => {
         const patch = {
           maxSize: config.maxSize,
@@ -369,6 +422,120 @@ export function SettingsPage() {
               on={settings.defaultMirrorConfig.turnScreenOff}
               onChange={(v) => updateDefaultConfig({ turnScreenOff: v })}
             />
+          </div>
+          <div className="grid4 config-grid" style={{ marginTop: 12, marginBottom: 12 }}>
+            <div className="col">
+              <label style={{ fontSize: 11, color: "var(--t2)", fontWeight: 600 }}>{t("mirror:recordMode")}</label>
+              <Dropdown
+                className="settings-config-select"
+                value={settings.defaultMirrorConfig.recordMode}
+                onChange={(v) => updateDefaultConfig({ recordMode: v as MirrorConfig["recordMode"] })}
+                options={recordModeOptions}
+              />
+            </div>
+            <div className="col">
+              <label style={{ fontSize: 11, color: "var(--t2)", fontWeight: 600 }}>{t("mirror:recordFormat")}</label>
+              <Dropdown
+                className="settings-config-select"
+                value={settings.defaultMirrorConfig.recordFormat}
+                onChange={(v) => updateDefaultConfig({ recordFormat: v as MirrorConfig["recordFormat"] })}
+                options={RECORD_FORMAT_OPTIONS}
+              />
+            </div>
+            <div className="col">
+              <label style={{ fontSize: 11, color: "var(--t2)", fontWeight: 600 }}>{t("mirror:orientation")}</label>
+              <Dropdown
+                className="settings-config-select"
+                value={settings.defaultMirrorConfig.orientation}
+                onChange={(v) => updateDefaultConfig({ orientation: v as MirrorConfig["orientation"] })}
+                options={orientationOptions}
+              />
+            </div>
+            <div className="col">
+              <label style={{ fontSize: 11, color: "var(--t2)", fontWeight: 600 }}>{t("mirror:recordDirectory")}</label>
+              <button className="btn btn-s" type="button" onClick={chooseRecordDirectory}>
+                {settings.defaultMirrorConfig.recordDirectory ? t("mirror:changeDirectory") : t("mirror:selectDirectory")}
+              </button>
+            </div>
+          </div>
+          {settings.defaultMirrorConfig.recordDirectory && (
+            <div className="mono" style={{ color: "var(--t2)", fontSize: 11, marginBottom: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {settings.defaultMirrorConfig.recordDirectory}
+            </div>
+          )}
+          <div className="settings-row">
+            <div>
+              <div style={{ fontWeight: 500 }}>{t("mirror:alwaysOnTop")}</div>
+              <div className="settings-desc">{t("mirror:alwaysOnTopDesc")}</div>
+            </div>
+            <Toggle
+              on={settings.defaultMirrorConfig.alwaysOnTop}
+              onChange={(v) => updateDefaultConfig({ alwaysOnTop: v })}
+            />
+          </div>
+          <div className="settings-row">
+            <div>
+              <div style={{ fontWeight: 500 }}>{t("mirror:windowBorderless")}</div>
+              <div className="settings-desc">{t("mirror:windowBorderlessDesc")}</div>
+            </div>
+            <Toggle
+              on={settings.defaultMirrorConfig.windowBorderless}
+              onChange={(v) => updateDefaultConfig({ windowBorderless: v })}
+            />
+          </div>
+          <div className="settings-row">
+            <div>
+              <div style={{ fontWeight: 500 }}>{t("mirror:printFps")}</div>
+              <div className="settings-desc">{t("mirror:printFpsDesc")}</div>
+            </div>
+            <Toggle
+              on={settings.defaultMirrorConfig.printFps}
+              onChange={(v) => updateDefaultConfig({ printFps: v })}
+            />
+          </div>
+          <div className="settings-row">
+            <div>
+              <div style={{ fontWeight: 500 }}>{t("mirror:audioEnabled")}</div>
+              <div className="settings-desc">{t("mirror:audioEnabledDesc")}</div>
+            </div>
+            <Toggle
+              on={settings.defaultMirrorConfig.audioEnabled}
+              onChange={(v) => updateDefaultConfig({ audioEnabled: v })}
+            />
+          </div>
+          <div className="grid4 config-grid" style={{ marginTop: 12 }}>
+            <div className="col">
+              <label style={{ fontSize: 11, color: "var(--t2)", fontWeight: 600 }}>{t("mirror:audioSource")}</label>
+              <Dropdown
+                className="settings-config-select"
+                value={settings.defaultMirrorConfig.audioSource}
+                onChange={(v) => updateDefaultConfig({ audioSource: v as MirrorConfig["audioSource"] })}
+                options={audioSourceOptions}
+              />
+            </div>
+            <div className="col">
+              <label style={{ fontSize: 11, color: "var(--t2)", fontWeight: 600 }}>{t("mirror:audioCodec")}</label>
+              <Dropdown
+                className="settings-config-select"
+                value={settings.defaultMirrorConfig.audioCodec}
+                onChange={(v) => updateDefaultConfig({ audioCodec: v as MirrorConfig["audioCodec"] })}
+                options={AUDIO_CODEC_OPTIONS}
+              />
+            </div>
+            <div className="col">
+              <label style={{ fontSize: 11, color: "var(--t2)", fontWeight: 600 }}>{t("mirror:audioDuplicate")}</label>
+              <Toggle
+                on={settings.defaultMirrorConfig.audioDuplicate}
+                onChange={(v) => updateDefaultConfig({ audioDuplicate: v })}
+              />
+            </div>
+            <div className="col">
+              <label style={{ fontSize: 11, color: "var(--t2)", fontWeight: 600 }}>{t("mirror:requireAudio")}</label>
+              <Toggle
+                on={settings.defaultMirrorConfig.requireAudio}
+                onChange={(v) => updateDefaultConfig({ requireAudio: v })}
+              />
+            </div>
           </div>
           </div>
         </section>

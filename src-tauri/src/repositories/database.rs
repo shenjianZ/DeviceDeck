@@ -25,7 +25,10 @@ impl Database {
     }
 
     fn run_migrations(&self) -> Result<(), AppError> {
-        let conn = self.conn.lock().map_err(|e| AppError::internal_error(&e.to_string()))?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| AppError::internal_error(&e.to_string()))?;
 
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS mirror_sessions (
@@ -50,12 +53,15 @@ impl Database {
 
             CREATE INDEX IF NOT EXISTS idx_logs_time ON logs(time);
             ",
-        ).map_err(|e| AppError::internal_error(&format!("数据库迁移失败: {e}")))?;
+        )
+        .map_err(|e| AppError::internal_error(&format!("数据库迁移失败: {e}")))?;
 
         Ok(())
     }
 
     pub fn conn(&self) -> Result<std::sync::MutexGuard<'_, Connection>, AppError> {
-        self.conn.lock().map_err(|e| AppError::internal_error(&e.to_string()))
+        self.conn
+            .lock()
+            .map_err(|e| AppError::internal_error(&e.to_string()))
     }
 }

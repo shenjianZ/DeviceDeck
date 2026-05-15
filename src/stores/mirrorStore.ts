@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { tauriApi } from "../lib/tauri";
+import { defaultAdvancedMirrorConfig } from "../lib/presets";
 import { useNotificationStore } from "./notificationStore";
 import type { MirrorConfig, MirrorSession, AppError } from "../types";
 import type { UnlistenFn } from "@tauri-apps/api/event";
@@ -22,6 +23,7 @@ interface MirrorStore {
 }
 
 const DEFAULT_CONFIG: MirrorConfig = {
+  ...defaultAdvancedMirrorConfig(),
   maxSize: "1080",
   videoBitRate: "8M",
   maxFps: "60",

@@ -68,7 +68,89 @@ pub enum DeviceCapability {
     Automation,
 }
 
+// ---- Device Capability Detection ----
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum VideoCodec {
+    H264,
+    H265,
+    Av1,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceCapabilityReport {
+    pub serial: String,
+    pub supported_encoders: Vec<String>,
+    pub supported_codecs: Vec<VideoCodec>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub screen_width: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub screen_height: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub android_version: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecommendedConfig {
+    pub label: String,
+    pub description: String,
+    pub config: MirrorConfig,
+}
+
 // ---- Mirror ----
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RecordMode {
+    Off,
+    Window,
+    Background,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RecordFormat {
+    Mp4,
+    Mkv,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MirrorOrientation {
+    Unlocked,
+    #[serde(rename = "0")]
+    Portrait0,
+    #[serde(rename = "90")]
+    Landscape90,
+    #[serde(rename = "180")]
+    Portrait180,
+    #[serde(rename = "270")]
+    Landscape270,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AudioSource {
+    Output,
+    Playback,
+    Mic,
+    MicCamcorder,
+    VoiceRecognition,
+    VoiceCommunication,
+    VoicePerformance,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AudioCodec {
+    Opus,
+    Aac,
+    Flac,
+    Raw,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -81,6 +163,30 @@ pub struct MirrorConfig {
     pub no_control: bool,
     pub stay_awake: bool,
     pub turn_screen_off: bool,
+    #[serde(default)]
+    pub record_mode: RecordMode,
+    #[serde(default)]
+    pub record_format: RecordFormat,
+    #[serde(default)]
+    pub record_directory: String,
+    #[serde(default)]
+    pub always_on_top: bool,
+    #[serde(default)]
+    pub window_borderless: bool,
+    #[serde(default)]
+    pub print_fps: bool,
+    #[serde(default)]
+    pub orientation: MirrorOrientation,
+    #[serde(default = "default_audio_enabled")]
+    pub audio_enabled: bool,
+    #[serde(default)]
+    pub audio_source: AudioSource,
+    #[serde(default)]
+    pub audio_codec: AudioCodec,
+    #[serde(default)]
+    pub audio_duplicate: bool,
+    #[serde(default)]
+    pub require_audio: bool,
 }
 
 impl Default for MirrorConfig {
@@ -93,12 +199,87 @@ impl Default for MirrorConfig {
             no_control: false,
             stay_awake: true,
             turn_screen_off: false,
+            record_mode: RecordMode::Off,
+            record_format: RecordFormat::Mp4,
+            record_directory: String::new(),
+            always_on_top: false,
+            window_borderless: false,
+            print_fps: false,
+            orientation: MirrorOrientation::Unlocked,
+            audio_enabled: true,
+            audio_source: AudioSource::Output,
+            audio_codec: AudioCodec::Opus,
+            audio_duplicate: false,
+            require_audio: false,
         }
+    }
+}
+
+impl Default for RecordMode {
+    fn default() -> Self {
+        Self::Off
+    }
+}
+
+impl Default for RecordFormat {
+    fn default() -> Self {
+        Self::Mp4
+    }
+}
+
+impl Default for MirrorOrientation {
+    fn default() -> Self {
+        Self::Unlocked
+    }
+}
+
+impl Default for AudioSource {
+    fn default() -> Self {
+        Self::Output
+    }
+}
+
+impl Default for AudioCodec {
+    fn default() -> Self {
+        Self::Opus
     }
 }
 
 fn default_video_codec() -> String {
     "h264".into()
+}
+
+fn default_audio_enabled() -> bool {
+    true
+}
+
+// ---- Device Tools ----
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceActionResult {
+    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stdout: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stderr: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DeviceKeyAction {
+    Home,
+    Back,
+    AppSwitch,
+    Menu,
+    Power,
+    VolumeUp,
+    VolumeDown,
+    ExpandNotifications,
+    CollapseNotifications,
+    TurnScreenOff,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -293,8 +474,38 @@ mod tests {
             "turnScreenOff": false
         }"#;
 
-        let config: MirrorConfig = serde_json::from_str(json).expect("old mirror config should load");
+        let config: MirrorConfig =
+            serde_json::from_str(json).expect("old mirror config should load");
 
         assert_eq!(config.video_codec, "h264");
+    }
+
+    #[test]
+    fn mirror_config_deserializes_old_config_with_advanced_defaults() {
+        let json = r#"{
+            "maxSize": "1080",
+            "videoBitRate": "8M",
+            "maxFps": "60",
+            "videoCodec": "h264",
+            "noControl": false,
+            "stayAwake": true,
+            "turnScreenOff": false
+        }"#;
+
+        let config: MirrorConfig =
+            serde_json::from_str(json).expect("old mirror config should load");
+
+        assert_eq!(config.record_mode, RecordMode::Off);
+        assert_eq!(config.record_format, RecordFormat::Mp4);
+        assert!(config.record_directory.is_empty());
+        assert!(!config.always_on_top);
+        assert!(!config.window_borderless);
+        assert!(!config.print_fps);
+        assert_eq!(config.orientation, MirrorOrientation::Unlocked);
+        assert!(config.audio_enabled);
+        assert_eq!(config.audio_source, AudioSource::Output);
+        assert_eq!(config.audio_codec, AudioCodec::Opus);
+        assert!(!config.audio_duplicate);
+        assert!(!config.require_audio);
     }
 }

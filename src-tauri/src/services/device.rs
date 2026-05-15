@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::core::error::AppError;
-use crate::core::types::DeviceInfo;
+use crate::core::types::{DeviceActionResult, DeviceInfo, DeviceKeyAction, RecommendedConfig};
 use crate::providers::android::provider::AndroidProvider;
 use crate::providers::android::types::WirelessAdbService;
 use crate::providers::provider_trait::DeviceProvider;
@@ -61,6 +61,61 @@ impl DeviceService {
     pub async fn disconnect_wireless_device(&self, serial: &str) -> Result<(), AppError> {
         self.android_provider
             .disconnect_wireless_device(serial)
+            .await
+    }
+
+    pub async fn detect_capabilities(
+        &self,
+        serial: &str,
+    ) -> Result<Vec<RecommendedConfig>, AppError> {
+        self.android_provider.detect_capabilities(serial).await
+    }
+
+    pub async fn take_screenshot(
+        &self,
+        serial: &str,
+        output_directory: Option<&str>,
+    ) -> Result<DeviceActionResult, AppError> {
+        self.android_provider
+            .take_screenshot(serial, output_directory)
+            .await
+    }
+
+    pub async fn install_apk(
+        &self,
+        serial: &str,
+        apk_path: &str,
+    ) -> Result<DeviceActionResult, AppError> {
+        self.android_provider.install_apk(serial, apk_path).await
+    }
+
+    pub async fn push_file(
+        &self,
+        serial: &str,
+        local_path: &str,
+        remote_directory: &str,
+    ) -> Result<DeviceActionResult, AppError> {
+        self.android_provider
+            .push_file(serial, local_path, remote_directory)
+            .await
+    }
+
+    pub async fn run_key_action(
+        &self,
+        serial: &str,
+        action: DeviceKeyAction,
+    ) -> Result<DeviceActionResult, AppError> {
+        self.android_provider.run_key_action(serial, action).await
+    }
+
+    pub async fn run_shell_command(
+        &self,
+        serial: &str,
+        command: &str,
+        timeout_ms: Option<u64>,
+    ) -> Result<DeviceActionResult, AppError> {
+        self.android_provider
+            .run_shell_command(serial, command, timeout_ms)
             .await
     }
 }
