@@ -180,11 +180,10 @@ fn which_command() -> &'static str {
     "which"
 }
 
-#[cfg(test)]
+#[cfg(all(test, windows))]
 mod tests {
     use super::*;
 
-    #[cfg(windows)]
     #[test]
     fn executable_file_names_include_plain_and_target_specific_windows_names() {
         let names = executable_file_names("adb");

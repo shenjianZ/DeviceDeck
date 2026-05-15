@@ -443,13 +443,18 @@ fn normalize_remote_push_directory(remote_directory: &str) -> Result<&str, AppEr
 }
 
 fn build_remote_push_target(local: &Path, remote_directory: &str) -> Result<String, AppError> {
-    let file_name = local
-        .file_name()
-        .and_then(|value| value.to_str())
-        .filter(|value| !value.trim().is_empty())
-        .ok_or_else(|| AppError::invalid_config("无法读取本地文件名"))?;
+    let file_name =
+        local_file_name(local).ok_or_else(|| AppError::invalid_config("无法读取本地文件名"))?;
     let remote_directory = normalize_remote_push_directory(remote_directory)?;
     Ok(format!("{}/{}", remote_directory, file_name))
+}
+
+fn local_file_name(local: &Path) -> Option<&str> {
+    local
+        .file_name()
+        .and_then(|value| value.to_str())
+        .and_then(|value| value.rsplit(['/', '\\']).next())
+        .filter(|value| !value.trim().is_empty())
 }
 
 async fn refresh_android_file_index(
