@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use crate::core::error::AppError;
 use crate::core::types::AppSettings;
+use crate::sidecar::process_command;
 
 pub struct BinaryResolver;
 
@@ -93,7 +94,7 @@ impl BinaryResolver {
 
     fn find_in_path(name: &str) -> Option<PathBuf> {
         let exe_name = executable_name(name);
-        let output = std::process::Command::new(which_command())
+        let output = process_command::new_std_command(which_command())
             .arg(&exe_name)
             .output()
             .ok()?;

@@ -7,6 +7,7 @@ use crate::core::types::{
     ConnectionType, DeviceActionResult, DeviceCapability, DeviceInfo, DeviceKeyAction,
     DevicePlatform, DeviceStatus,
 };
+use crate::sidecar::process_command;
 use crate::sidecar::shell_runner::ShellRunner;
 
 const DEFAULT_PUSH_DIRECTORY: &str = "/sdcard/Download/DeviceDeck";
@@ -203,7 +204,7 @@ pub async fn execute_screenshot(
 
     let output = tokio::time::timeout(
         std::time::Duration::from_secs(15),
-        tokio::process::Command::new(adb_path)
+        process_command::new_tokio_command(adb_path)
             .args(["-s", serial, "exec-out", "screencap", "-p"])
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())

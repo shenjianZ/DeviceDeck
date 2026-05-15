@@ -4,7 +4,6 @@ use std::sync::Arc;
 
 use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::Command;
 use tokio::sync::Mutex;
 
 use super::error::AppError;
@@ -12,6 +11,7 @@ use super::log_bus::LogBus;
 use super::types::{MirrorConfig, MirrorSession, SessionStatus};
 use crate::repositories::database::Database;
 use crate::repositories::session::SessionRepository;
+use crate::sidecar::process_command;
 
 struct ManagedProcess {
     device_serial: String,
@@ -45,7 +45,7 @@ impl ProcessManager {
     ) -> Result<MirrorSession, AppError> {
         let working_dir = resolve_working_dir(&scrcpy_path);
 
-        let mut child = Command::new(&scrcpy_path)
+        let mut child = process_command::new_tokio_command(&scrcpy_path)
             .args(&args)
             .current_dir(&working_dir)
             .stdout(std::process::Stdio::piped())
@@ -210,7 +210,7 @@ impl ProcessManager {
 
 #[cfg(windows)]
 async fn kill_process_tree(pid: u32) -> Result<(), AppError> {
-    let output = Command::new("taskkill")
+    let output = process_command::new_tokio_command("taskkill")
         .args(["/F", "/T", "/PID", &pid.to_string()])
         .output()
         .await
@@ -227,7 +227,7 @@ async fn kill_process_tree(pid: u32) -> Result<(), AppError> {
 
 #[cfg(not(windows))]
 async fn kill_process_tree(pid: u32) -> Result<(), AppError> {
-    let output = Command::new("kill")
+    let output = process_command::new_tokio_command("kill")
         .args(["-TERM", &pid.to_string()])
         .output()
         .await

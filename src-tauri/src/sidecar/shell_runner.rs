@@ -1,9 +1,8 @@
 use std::path::Path;
 use std::time::Duration;
 
-use tokio::process::Command;
-
 use crate::core::error::AppError;
+use crate::sidecar::process_command;
 
 pub struct CommandOutput {
     pub stdout: String,
@@ -25,7 +24,7 @@ impl ShellRunner {
     ) -> Result<CommandOutput, AppError> {
         let output = tokio::time::timeout(
             timeout,
-            Command::new(program)
+            process_command::new_tokio_command(program)
                 .args(args)
                 .stdout(std::process::Stdio::piped())
                 .stderr(std::process::Stdio::piped())
