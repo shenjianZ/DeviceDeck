@@ -1,18 +1,17 @@
 {
   "bundle": {
     "resources": {
-      "binaries/adb-x86_64-pc-windows-msvc.exe": "binaries/adb.exe",
-      "binaries/scrcpy-x86_64-pc-windows-msvc.exe": "binaries/scrcpy.exe",
-      "binaries/scrcpy-server": "binaries/scrcpy-server",
-      "binaries/AdbWinApi.dll": "binaries/AdbWinApi.dll",
-      "binaries/AdbWinUsbApi.dll": "binaries/AdbWinUsbApi.dll",
-      "binaries/SDL3.dll": "binaries/SDL3.dll",
-      "binaries/avcodec-62.dll": "binaries/avcodec-62.dll",
-      "binaries/avformat-62.dll": "binaries/avformat-62.dll",
-      "binaries/avutil-60.dll": "binaries/avutil-60.dll",
-      "binaries/libusb-1.0.dll": "binaries/libusb-1.0.dll",
-      "binaries/libwinpthread-1.dll": "binaries/libwinpthread-1.dll",
-      "binaries/swresample-6.dll": "binaries/swresample-6.dll"
+      "binaries/windows-x64/adb.exe": "binaries/windows-x64/adb.exe",
+      "binaries/windows-x64/scrcpy.exe": "binaries/windows-x64/scrcpy.exe",
+      "binaries/windows-x64/scrcpy-server": "binaries/windows-x64/scrcpy-server",
+      "binaries/windows-x64/AdbWinApi.dll": "binaries/windows-x64/AdbWinApi.dll",
+      "binaries/windows-x64/AdbWinUsbApi.dll": "binaries/windows-x64/AdbWinUsbApi.dll",
+      "binaries/windows-x64/SDL3.dll": "binaries/windows-x64/SDL3.dll",
+      "binaries/windows-x64/avcodec-62.dll": "binaries/windows-x64/avcodec-62.dll",
+      "binaries/windows-x64/avformat-62.dll": "binaries/windows-x64/avformat-62.dll",
+      "binaries/windows-x64/avutil-60.dll": "binaries/windows-x64/avutil-60.dll",
+      "binaries/windows-x64/libusb-1.0.dll": "binaries/windows-x64/libusb-1.0.dll",
+      "binaries/windows-x64/swresample-6.dll": "binaries/windows-x64/swresample-6.dll"
     }
   }
 }

@@ -3,6 +3,7 @@ use std::path::PathBuf;
 fn main() {
     configure_existing_sidecars();
     sync_dev_binaries();
+    ensure_unix_executable_permissions();
     tauri_build::build()
 }
 
@@ -111,3 +112,31 @@ fn sync_dev_binaries() {
         }
     }
 }
+
+#[cfg(unix)]
+fn ensure_unix_executable_permissions() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let manifest_dir =
+        PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".into()));
+
+    for dir in ["linux-x64", "macos-aarch64", "macos-x64"] {
+        for name in ["adb", "scrcpy"] {
+            let path = manifest_dir.join("binaries").join(dir).join(name);
+            let Ok(metadata) = std::fs::metadata(&path) else {
+                continue;
+            };
+            let mut permissions = metadata.permissions();
+            permissions.set_mode(0o755);
+            if let Err(error) = std::fs::set_permissions(&path, permissions) {
+                println!(
+                    "cargo:warning=failed to mark {} executable: {error}",
+                    path.display()
+                );
+            }
+        }
+    }
+}
+
+#[cfg(not(unix))]
+fn ensure_unix_executable_permissions() {}

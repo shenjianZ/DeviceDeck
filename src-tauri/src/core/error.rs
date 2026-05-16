@@ -34,13 +34,12 @@ impl AppError {
     // ---- Factory methods for common errors ----
 
     pub fn adb_not_found() -> Self {
-        Self::new("ADB_NOT_FOUND", "未检测到 adb")
-            .with_suggestion("请使用内置 adb，或在设置中配置 adb.exe 路径")
+        Self::new("ADB_NOT_FOUND", "未检测到 adb").with_suggestion(adb_not_found_suggestion())
     }
 
     pub fn scrcpy_not_found() -> Self {
         Self::new("SCRCPY_NOT_FOUND", "未检测到 scrcpy")
-            .with_suggestion("请使用内置 scrcpy，或在设置中配置 scrcpy.exe 路径")
+            .with_suggestion(scrcpy_not_found_suggestion())
     }
 
     pub fn device_not_found(serial: &str) -> Self {
@@ -106,6 +105,28 @@ impl AppError {
     pub fn internal_error(reason: &str) -> Self {
         Self::new("INTERNAL_ERROR", "内部错误").with_detail(reason)
     }
+}
+
+#[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+fn adb_not_found_suggestion() -> &'static str {
+    "当前平台 (Linux ARM64) 未内置 adb，请通过系统包管理器安装后使用：\
+     sudo apt install adb，或在设置中配置自定义 adb 路径"
+}
+
+#[cfg(not(all(target_os = "linux", target_arch = "aarch64")))]
+fn adb_not_found_suggestion() -> &'static str {
+    "请使用内置 adb，或在设置中配置 adb 路径"
+}
+
+#[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+fn scrcpy_not_found_suggestion() -> &'static str {
+    "当前平台 (Linux ARM64) 未内置 scrcpy，请通过系统包管理器安装后使用：\
+     sudo apt install scrcpy，或在设置中配置自定义 scrcpy 路径"
+}
+
+#[cfg(not(all(target_os = "linux", target_arch = "aarch64")))]
+fn scrcpy_not_found_suggestion() -> &'static str {
+    "请使用内置 scrcpy，或在设置中配置 scrcpy 路径"
 }
 
 impl From<std::io::Error> for AppError {

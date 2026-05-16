@@ -1,0 +1,12 @@
+{
+  "bundle": {
+    "resources": {
+      "binaries/macos-aarch64/adb": "binaries/macos-aarch64/adb",
+      "binaries/macos-aarch64/scrcpy": "binaries/macos-aarch64/scrcpy",
+      "binaries/macos-aarch64/scrcpy-server": "binaries/macos-aarch64/scrcpy-server",
+      "binaries/macos-x64/adb": "binaries/macos-x64/adb",
+      "binaries/macos-x64/scrcpy": "binaries/macos-x64/scrcpy",
+      "binaries/macos-x64/scrcpy-server": "binaries/macos-x64/scrcpy-server"
+    }
+  }
+}

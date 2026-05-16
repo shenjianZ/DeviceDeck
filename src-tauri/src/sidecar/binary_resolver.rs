@@ -61,7 +61,7 @@ impl BinaryResolver {
 
         if let Ok(current_exe) = std::env::current_exe() {
             if let Some(dir) = current_exe.parent() {
-                for file_name in executable_file_names(name) {
+                for file_name in bundled_file_names(name) {
                     candidates.push(dir.join(&file_name));
                     candidates.push(dir.join("sidecar").join(&file_name));
                     candidates.push(dir.join("binaries").join(&file_name));
@@ -77,19 +77,11 @@ impl BinaryResolver {
 
     fn find_dev_sidecar(name: &str) -> Option<PathBuf> {
         let binaries_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("binaries");
-        let extension = executable_extension();
-        let prefix = format!("{name}-");
 
-        std::fs::read_dir(binaries_dir)
-            .ok()?
-            .filter_map(Result::ok)
-            .map(|entry| entry.path())
-            .find(|path| {
-                let Some(file_name) = path.file_name().and_then(|value| value.to_str()) else {
-                    return false;
-                };
-                file_name.starts_with(&prefix) && file_name.ends_with(extension) && path.is_file()
-            })
+        dev_sidecar_file_names(name)
+            .into_iter()
+            .map(|file_name| binaries_dir.join(file_name))
+            .find(|path| path.is_file())
     }
 
     fn find_in_path(name: &str) -> Option<PathBuf> {
@@ -126,7 +118,7 @@ fn executable_name(name: &str) -> String {
 fn executable_file_names(name: &str) -> Vec<String> {
     let mut names = vec![executable_name(name)];
 
-    if let Some(target) = windows_target_triple() {
+    if let Some(target) = target_triple() {
         names.push(format!("{name}-{target}.exe"));
     }
 
@@ -135,40 +127,105 @@ fn executable_file_names(name: &str) -> Vec<String> {
 
 #[cfg(not(windows))]
 fn executable_file_names(name: &str) -> Vec<String> {
-    vec![executable_name(name)]
+    let mut names = vec![executable_name(name)];
+
+    if let Some(target) = target_triple() {
+        names.push(format!("{name}-{target}"));
+    }
+
+    names
+}
+
+fn dev_sidecar_file_names(name: &str) -> Vec<String> {
+    bundled_file_names(name)
+}
+
+fn bundled_file_names(name: &str) -> Vec<String> {
+    let mut names = executable_file_names(name);
+
+    if let Some(dir) = platform_binary_dir() {
+        names.push(format!("{dir}/{}", executable_name(name)));
+    }
+
+    names
 }
 
 #[cfg(all(windows, target_arch = "x86_64"))]
-fn windows_target_triple() -> Option<&'static str> {
+fn platform_binary_dir() -> Option<&'static str> {
+    Some("windows-x64")
+}
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+fn platform_binary_dir() -> Option<&'static str> {
+    Some("linux-x64")
+}
+
+#[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+fn platform_binary_dir() -> Option<&'static str> {
+    Some("macos-x64")
+}
+
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+fn platform_binary_dir() -> Option<&'static str> {
+    Some("macos-aarch64")
+}
+
+#[cfg(all(not(any(
+    all(windows, target_arch = "x86_64"),
+    all(target_os = "linux", target_arch = "x86_64"),
+    all(target_os = "macos", target_arch = "x86_64"),
+    all(target_os = "macos", target_arch = "aarch64"),
+))))]
+fn platform_binary_dir() -> Option<&'static str> {
+    None
+}
+
+#[cfg(all(windows, target_arch = "x86_64"))]
+fn target_triple() -> Option<&'static str> {
     Some("x86_64-pc-windows-msvc")
 }
 
 #[cfg(all(windows, target_arch = "aarch64"))]
-fn windows_target_triple() -> Option<&'static str> {
+fn target_triple() -> Option<&'static str> {
     Some("aarch64-pc-windows-msvc")
 }
 
 #[cfg(all(windows, target_arch = "x86"))]
-fn windows_target_triple() -> Option<&'static str> {
+fn target_triple() -> Option<&'static str> {
     Some("i686-pc-windows-msvc")
 }
 
-#[cfg(all(
-    windows,
-    not(any(target_arch = "x86_64", target_arch = "aarch64", target_arch = "x86"))
-))]
-fn windows_target_triple() -> Option<&'static str> {
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+fn target_triple() -> Option<&'static str> {
+    Some("x86_64-unknown-linux-gnu")
+}
+
+#[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+fn target_triple() -> Option<&'static str> {
+    Some("aarch64-unknown-linux-gnu")
+}
+
+#[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+fn target_triple() -> Option<&'static str> {
+    Some("x86_64-apple-darwin")
+}
+
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+fn target_triple() -> Option<&'static str> {
+    Some("aarch64-apple-darwin")
+}
+
+#[cfg(all(not(any(
+    all(windows, target_arch = "x86_64"),
+    all(windows, target_arch = "aarch64"),
+    all(windows, target_arch = "x86"),
+    all(target_os = "linux", target_arch = "x86_64"),
+    all(target_os = "linux", target_arch = "aarch64"),
+    all(target_os = "macos", target_arch = "x86_64"),
+    all(target_os = "macos", target_arch = "aarch64"),
+))))]
+fn target_triple() -> Option<&'static str> {
     None
-}
-
-#[cfg(windows)]
-fn executable_extension() -> &'static str {
-    ".exe"
-}
-
-#[cfg(not(windows))]
-fn executable_extension() -> &'static str {
-    ""
 }
 
 #[cfg(windows)]
@@ -191,5 +248,44 @@ mod tests {
 
         assert!(names.contains(&"adb.exe".to_string()));
         assert!(names.contains(&"adb-x86_64-pc-windows-msvc.exe".to_string()));
+    }
+
+    #[test]
+    fn target_triple_returns_current_windows_target() {
+        #[cfg(target_arch = "x86_64")]
+        assert_eq!(target_triple(), Some("x86_64-pc-windows-msvc"));
+
+        #[cfg(target_arch = "aarch64")]
+        assert_eq!(target_triple(), Some("aarch64-pc-windows-msvc"));
+
+        #[cfg(target_arch = "x86")]
+        assert_eq!(target_triple(), Some("i686-pc-windows-msvc"));
+    }
+
+    #[test]
+    fn dev_sidecar_file_names_include_platform_directory_candidates() {
+        let names = dev_sidecar_file_names("adb");
+
+        assert!(names.contains(&"adb.exe".to_string()));
+        assert!(names.contains(&"windows-x64/adb.exe".to_string()));
+    }
+}
+
+#[cfg(all(
+    test,
+    not(windows),
+    any(target_os = "linux", target_os = "macos"),
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn executable_file_names_include_plain_and_target_specific_unix_names() {
+        let names = executable_file_names("adb");
+        let target = target_triple().expect("supported non-Windows target triple");
+
+        assert!(names.contains(&"adb".to_string()));
+        assert!(names.contains(&format!("adb-{target}")));
     }
 }

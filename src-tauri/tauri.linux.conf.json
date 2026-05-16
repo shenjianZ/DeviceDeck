@@ -1,0 +1,9 @@
+{
+  "bundle": {
+    "resources": {
+      "binaries/linux-x64/adb": "binaries/linux-x64/adb",
+      "binaries/linux-x64/scrcpy": "binaries/linux-x64/scrcpy",
+      "binaries/linux-x64/scrcpy-server": "binaries/scrcpy-server"
+    }
+  }
+}
