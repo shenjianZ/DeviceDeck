@@ -79,6 +79,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Fetch bundled binary LFS objects
+        run: git lfs pull --include="src-tauri/binaries/**"
 
       - name: Validate release version
         shell: pwsh
@@ -90,6 +95,42 @@ jobs:
           if ($packageVersion -ne $tagVersion) { throw "package.json version $packageVersion != tag $tagVersion" }
           if ($tauriVersion -ne $tagVersion) { throw "tauri.conf.json version $tauriVersion != tag $tagVersion" }
           if ($cargoVersion -ne $tagVersion) { throw "Cargo.toml version $cargoVersion != tag $tagVersion" }
+
+      - name: Validate bundled binary contents
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $binaryRoot = "src-tauri/binaries"
+          if (!(Test-Path $binaryRoot)) {
+            throw "Bundled binary directory not found: $binaryRoot"
+          }
+
+          $files = Get-ChildItem -Path $binaryRoot -Recurse -File | Where-Object {
+            !$_.Name.Equals("README.md", [System.StringComparison]::OrdinalIgnoreCase)
+          }
+
+          if (!$files) {
+            throw "No bundled binary files found in $binaryRoot"
+          }
+
+          $pointerFiles = @()
+          foreach ($file in $files) {
+            $bytes = [System.IO.File]::ReadAllBytes($file.FullName)
+            $prefixLength = [Math]::Min($bytes.Length, 128)
+            $prefix = [System.Text.Encoding]::ASCII.GetString($bytes, 0, $prefixLength)
+            if ($prefix.StartsWith("version https://git-lfs.github.com/spec/v1")) {
+              $pointerFiles += $file.FullName
+            }
+          }
+
+          if ($pointerFiles.Count -gt 0) {
+            throw "Bundled binary files are still Git LFS pointers:`n$($pointerFiles -join "`n")"
+          }
+
+          $files | ForEach-Object {
+            Write-Host "Validated bundled binary: $($_.FullName) ($($_.Length) bytes)"
+          }
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
