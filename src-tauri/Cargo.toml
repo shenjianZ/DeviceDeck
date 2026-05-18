@@ -1,6 +1,6 @@
 [package]
 name = "devicedeck"
-version = "0.1.0"
+version = "0.1.1"
 description = "A modern Android screen mirroring and device management workbench"
 authors = ["shenjianZ"]
 edition = "2021"
