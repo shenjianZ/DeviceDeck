@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::core::error::AppError;
 use crate::core::types::AppSettings;
@@ -68,6 +68,11 @@ impl BinaryResolver {
                     candidates.push(dir.join("resources").join(&file_name));
                     candidates.push(dir.join("resources").join("binaries").join(&file_name));
                     candidates.push(dir.join("_up_").join("binaries").join(&file_name));
+
+                    if let Some(resources_dir) = macos_resources_dir(dir) {
+                        candidates.push(resources_dir.join(&file_name));
+                        candidates.push(resources_dir.join("binaries").join(&file_name));
+                    }
                 }
             }
         }
@@ -148,6 +153,19 @@ fn bundled_file_names(name: &str) -> Vec<String> {
     }
 
     names
+}
+
+fn macos_resources_dir(exe_dir: &Path) -> Option<PathBuf> {
+    let contents_dir = exe_dir.parent()?;
+    if exe_dir.file_name().and_then(|value| value.to_str()) != Some("MacOS") {
+        return None;
+    }
+
+    if contents_dir.file_name().and_then(|value| value.to_str()) != Some("Contents") {
+        return None;
+    }
+
+    Some(contents_dir.join("Resources"))
 }
 
 #[cfg(all(windows, target_arch = "x86_64"))]
@@ -269,6 +287,20 @@ mod tests {
         assert!(names.contains(&"adb.exe".to_string()));
         assert!(names.contains(&"windows-x64/adb.exe".to_string()));
     }
+
+    #[test]
+    fn macos_resources_dir_is_only_returned_for_app_bundle_macos_dir() {
+        let resources_dir =
+            macos_resources_dir(Path::new("/Applications/DeviceDeck.app/Contents/MacOS"));
+
+        assert_eq!(
+            resources_dir,
+            Some(PathBuf::from(
+                "/Applications/DeviceDeck.app/Contents/Resources"
+            ))
+        );
+        assert_eq!(macos_resources_dir(Path::new("/tmp/DeviceDeck")), None);
+    }
 }
 
 #[cfg(all(
@@ -287,5 +319,19 @@ mod tests {
 
         assert!(names.contains(&"adb".to_string()));
         assert!(names.contains(&format!("adb-{target}")));
+    }
+
+    #[test]
+    fn macos_resources_dir_is_only_returned_for_app_bundle_macos_dir() {
+        let resources_dir =
+            macos_resources_dir(Path::new("/Applications/DeviceDeck.app/Contents/MacOS"));
+
+        assert_eq!(
+            resources_dir,
+            Some(PathBuf::from(
+                "/Applications/DeviceDeck.app/Contents/Resources"
+            ))
+        );
+        assert_eq!(macos_resources_dir(Path::new("/tmp/DeviceDeck")), None);
     }
 }

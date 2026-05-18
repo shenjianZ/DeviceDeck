@@ -260,6 +260,10 @@ fn resolve_working_dir(program_path: &std::path::Path) -> PathBuf {
     }
 
     let candidates = [
+        program_dir
+            .parent()
+            .map(PathBuf::from)
+            .unwrap_or_else(|| program_dir.clone()),
         program_dir.join("binaries"),
         program_dir.join("resources").join("binaries"),
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("binaries"),
@@ -269,4 +273,50 @@ fn resolve_working_dir(program_path: &std::path::Path) -> PathBuf {
         .into_iter()
         .find(|path| path.join("scrcpy-server").is_file())
         .unwrap_or(program_dir)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolve_working_dir_uses_program_dir_when_server_is_next_to_scrcpy() {
+        let root = unique_temp_dir("same-dir-server");
+        let program_dir = root.join("binaries").join("macos-aarch64");
+        std::fs::create_dir_all(&program_dir).unwrap();
+        std::fs::write(program_dir.join("scrcpy-server"), b"server").unwrap();
+
+        assert_eq!(
+            resolve_working_dir(&program_dir.join("scrcpy")),
+            program_dir
+        );
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn resolve_working_dir_uses_parent_binaries_dir_for_shared_server() {
+        let root = unique_temp_dir("shared-server");
+        let binaries_dir = root.join("binaries");
+        let program_dir = binaries_dir.join("linux-x64");
+        std::fs::create_dir_all(&program_dir).unwrap();
+        std::fs::write(binaries_dir.join("scrcpy-server"), b"server").unwrap();
+
+        assert_eq!(
+            resolve_working_dir(&program_dir.join("scrcpy")),
+            binaries_dir
+        );
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    fn unique_temp_dir(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "devicedeck-{name}-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ))
+    }
 }
