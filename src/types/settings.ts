@@ -15,6 +15,7 @@ export interface AppSettings {
   locale?: "zh-CN" | "en";
   autoStart?: boolean;
   autoUpdateEnabled?: boolean;
+  firstRun?: boolean;
 }
 
 export interface ToolStatus {

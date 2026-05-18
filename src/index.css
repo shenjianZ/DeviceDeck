@@ -2027,3 +2027,101 @@ input {
     width: 12px;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   Welcome Overlay - 首次运行语言选择
+   ═══════════════════════════════════════════════════════════ */
+
+.welcome-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-0);
+}
+
+.welcome-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 48px 56px;
+  border-radius: 16px;
+  background: var(--card);
+  border: 1px solid var(--bd);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  max-width: 400px;
+  width: 90%;
+}
+
+[data-theme="dark"] .welcome-card {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.welcome-logo {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: var(--acc);
+  color: #fff;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.welcome-title {
+  font-size: var(--font-size-2xl);
+  font-weight: 600;
+  color: var(--t0);
+  text-align: center;
+}
+
+.welcome-subtitle {
+  font-size: var(--font-size-base);
+  color: var(--t2);
+  text-align: center;
+}
+
+.welcome-lang-options {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+}
+
+.welcome-lang-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 20px;
+  border: 1px solid var(--bd);
+  border-radius: 10px;
+  background: var(--bg-2);
+  color: var(--t1);
+  font-size: var(--font-size-lg);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.welcome-lang-btn:hover {
+  border-color: var(--bdh);
+  color: var(--t0);
+}
+
+.welcome-lang-btn.active {
+  border-color: var(--acc);
+  background: var(--acc-s);
+  color: var(--acc);
+  font-weight: 600;
+}
+
+.welcome-continue {
+  width: 100%;
+  height: 40px;
+  margin-top: 4px;
+}

@@ -41,6 +41,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   locale: "zh-CN",
   autoStart: false,
   autoUpdateEnabled: true,
+  firstRun: true,
 };
 
 function applyFontSize(fontSize: number) {

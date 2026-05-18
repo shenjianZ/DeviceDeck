@@ -10,7 +10,7 @@ pub struct SettingsRepository {
 impl SettingsRepository {
     pub fn new(data_dir: &std::path::Path) -> Self {
         Self {
-            config_path: data_dir.join("app_config.json"),
+            config_path: data_dir.join("config.json"),
         }
     }
 

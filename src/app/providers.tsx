@@ -7,6 +7,8 @@ import { useSettingsStore } from "../stores/settingsStore";
 import { applyTheme } from "../lib/theme";
 import { installContextMenuBlocker, installShortcutBlocker } from "../lib/keyboardShortcuts";
 import { AppShell } from "../components/layout/AppShell";
+import { WelcomeOverlay } from "../components/WelcomeOverlay";
+import i18n from "../i18n";
 
 export function AppProviders() {
   const checkEnvironment = useDeviceStore((s) => s.checkEnvironment);
@@ -19,17 +21,15 @@ export function AppProviders() {
   const settings = useSettingsStore((s) => s.settings);
   const refreshSessions = useMirrorStore((s) => s.refreshSessions);
 
-  const [theme, setTheme] = useState<"dark" | "light">(() => {
-    const saved = localStorage.getItem("dd-theme");
-    return (saved === "light" || saved === "dark") ? saved : "dark";
-  });
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [initialized, setInitialized] = useState(false);
 
   const unlistenRefs = useRef<UnlistenFn[]>([]);
 
   useEffect(() => installShortcutBlocker(), []);
   useEffect(() => installContextMenuBlocker(), []);
 
-  // Sync theme from store to local state (when settings load from backend)
   useEffect(() => {
     const t = settings.theme;
     if (t === "light" || t === "dark") {
@@ -40,6 +40,14 @@ export function AppProviders() {
   useEffect(() => {
     applyTheme(theme);
   }, [theme]);
+
+  // Sync locale from settings to i18n (after settings loaded, not first-run)
+  useEffect(() => {
+    if (settings.locale && !settings.firstRun && initialized) {
+      i18n.changeLanguage(settings.locale);
+      localStorage.setItem("dd-locale", settings.locale);
+    }
+  }, [settings.locale, settings.firstRun, initialized]);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,8 +75,18 @@ export function AppProviders() {
         refreshSessions(),
       ]);
 
+      if (cancelled) return;
+
       const currentSettings = useSettingsStore.getState().settings;
-      if (!cancelled && currentSettings.autoScanDevices) {
+      if (currentSettings.firstRun) {
+        setShowWelcome(true);
+        setInitialized(true);
+        return;
+      }
+
+      setInitialized(true);
+
+      if (currentSettings.autoScanDevices) {
         await Promise.all([
           scanDevices(true),
           discoverWirelessDevices(true),
@@ -86,7 +104,7 @@ export function AppProviders() {
   }, [checkEnvironment, discoverWirelessDevices, loadLogs, loadSettings, refreshSessions, scanDevices, startLogListening, startSessionListening]);
 
   useEffect(() => {
-    if (!settings.autoScanDevices) return;
+    if (!settings.autoScanDevices || showWelcome) return;
 
     const intervalSeconds = clampScanInterval(settings.deviceScanIntervalSeconds);
     const timer = window.setInterval(() => {
@@ -100,6 +118,7 @@ export function AppProviders() {
     scanDevices,
     settings.autoScanDevices,
     settings.deviceScanIntervalSeconds,
+    showWelcome,
   ]);
 
   const toggleTheme = () => {
@@ -107,6 +126,18 @@ export function AppProviders() {
     setTheme(newTheme);
     useSettingsStore.getState().updateSetting("theme", newTheme);
   };
+
+  const handleWelcomeComplete = () => {
+    setShowWelcome(false);
+    if (useSettingsStore.getState().settings.autoScanDevices) {
+      scanDevices(true);
+      discoverWirelessDevices(true);
+    }
+  };
+
+  if (showWelcome) {
+    return <WelcomeOverlay onComplete={handleWelcomeComplete} />;
+  }
 
   return <AppShell theme={theme} onToggleTheme={toggleTheme} />;
 }

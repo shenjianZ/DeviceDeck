@@ -43,7 +43,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .setup(move |app| {
-            let data_dir = app.path().app_data_dir().expect("无法获取 app data 目录");
+            let data_dir = core::data_dir::ensure_data_dir().expect("无法初始化数据目录");
 
             let db = Arc::new(Database::open(&data_dir).expect("无法初始化数据库"));
 

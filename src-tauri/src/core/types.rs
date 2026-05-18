@@ -388,6 +388,8 @@ pub struct AppSettings {
     pub auto_start: bool,
     #[serde(default = "default_auto_update_enabled")]
     pub auto_update_enabled: bool,
+    #[serde(default = "default_first_run")]
+    pub first_run: bool,
 }
 
 impl Default for AppSettings {
@@ -407,6 +409,7 @@ impl Default for AppSettings {
             locale: default_locale(),
             auto_start: false,
             auto_update_enabled: default_auto_update_enabled(),
+            first_run: default_first_run(),
         }
     }
 }
@@ -428,6 +431,10 @@ fn default_locale() -> String {
 }
 
 fn default_auto_update_enabled() -> bool {
+    true
+}
+
+fn default_first_run() -> bool {
     true
 }
 
