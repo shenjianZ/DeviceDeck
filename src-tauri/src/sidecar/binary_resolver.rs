@@ -149,7 +149,12 @@ fn bundled_file_names(name: &str) -> Vec<String> {
     let mut names = executable_file_names(name);
 
     if let Some(dir) = platform_binary_dir() {
-        names.push(format!("{dir}/{}", executable_name(name)));
+        names.push(
+            PathBuf::from(dir)
+                .join(executable_name(name))
+                .to_string_lossy()
+                .into_owned(),
+        );
     }
 
     names
@@ -285,7 +290,7 @@ mod tests {
         let names = dev_sidecar_file_names("adb");
 
         assert!(names.contains(&"adb.exe".to_string()));
-        assert!(names.contains(&"windows-x64/adb.exe".to_string()));
+        assert!(names.contains(&"windows-x64\\adb.exe".to_string()));
     }
 
     #[test]

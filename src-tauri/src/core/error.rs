@@ -31,102 +31,98 @@ impl AppError {
         self
     }
 
-    // ---- Factory methods for common errors ----
-
     pub fn adb_not_found() -> Self {
-        Self::new("ADB_NOT_FOUND", "未检测到 adb").with_suggestion(adb_not_found_suggestion())
+        Self::new("ADB_NOT_FOUND", "adb not detected").with_suggestion(adb_not_found_suggestion())
     }
 
     pub fn scrcpy_not_found() -> Self {
-        Self::new("SCRCPY_NOT_FOUND", "未检测到 scrcpy")
+        Self::new("SCRCPY_NOT_FOUND", "scrcpy not detected")
             .with_suggestion(scrcpy_not_found_suggestion())
     }
 
     pub fn device_not_found(serial: &str) -> Self {
-        Self::new("DEVICE_NOT_FOUND", "设备未找到").with_detail(serial)
+        Self::new("DEVICE_NOT_FOUND", "Device not found").with_detail(serial)
     }
 
     pub fn device_unauthorized(serial: &str) -> Self {
-        Self::new("DEVICE_UNAUTHORIZED", "设备未授权")
+        Self::new("DEVICE_UNAUTHORIZED", "Device unauthorized")
             .with_detail(serial)
-            .with_suggestion("请在 Android 手机上确认 USB 调试授权弹窗，然后重新扫描设备")
+            .with_suggestion("Confirm the USB debugging authorization dialog on your Android device, then rescan")
     }
 
     pub fn device_offline(serial: &str) -> Self {
-        Self::new("DEVICE_OFFLINE", "设备离线")
+        Self::new("DEVICE_OFFLINE", "Device offline")
             .with_detail(serial)
-            .with_suggestion("请检查 USB 连接或重新插拔数据线")
+            .with_suggestion("Check USB connection or reconnect the cable")
     }
 
     pub fn mirror_already_running(serial: &str) -> Self {
-        Self::new("MIRROR_ALREADY_RUNNING", "该设备已有运行中的投屏会话").with_detail(serial)
+        Self::new("MIRROR_ALREADY_RUNNING", "A mirror session is already running on this device").with_detail(serial)
     }
 
     pub fn mirror_start_failed(reason: &str) -> Self {
-        Self::new("MIRROR_START_FAILED", "投屏启动失败").with_detail(reason)
+        Self::new("MIRROR_START_FAILED", "Failed to start mirroring").with_detail(reason)
     }
 
     pub fn mirror_stop_failed(reason: &str) -> Self {
-        Self::new("MIRROR_STOP_FAILED", "投屏停止失败").with_detail(reason)
+        Self::new("MIRROR_STOP_FAILED", "Failed to stop mirroring").with_detail(reason)
     }
 
     pub fn wireless_connect_failed(reason: &str) -> Self {
-        Self::new("WIRELESS_CONNECT_FAILED", "无线连接失败")
+        Self::new("WIRELESS_CONNECT_FAILED", "Wireless connection failed")
             .with_detail(reason)
-            .with_suggestion("请确认手机和电脑在同一局域网，且手机已开启 USB 调试或无线调试")
+            .with_suggestion("Make sure your phone and computer are on the same network, and USB/wireless debugging is enabled")
     }
 
     pub fn wireless_ip_not_found(serial: &str) -> Self {
-        Self::new("WIRELESS_IP_NOT_FOUND", "未获取到设备局域网 IP")
+        Self::new("WIRELESS_IP_NOT_FOUND", "Could not get device LAN IP")
             .with_detail(serial)
-            .with_suggestion("请确认手机已连接 WiFi，并与电脑处于同一局域网")
+            .with_suggestion("Make sure your phone is connected to WiFi and on the same network as your computer")
     }
 
     pub fn wireless_discovery_failed(reason: &str) -> Self {
-        Self::new("WIRELESS_DISCOVERY_FAILED", "无线设备扫描失败")
+        Self::new("WIRELESS_DISCOVERY_FAILED", "Wireless device discovery failed")
             .with_detail(reason)
-            .with_suggestion("请确认 ADB 可用，并已在 Android 无线调试页面开启无线调试")
+            .with_suggestion("Make sure ADB is available and wireless debugging is enabled in Android settings")
     }
 
     pub fn invalid_config(reason: &str) -> Self {
-        Self::new("INVALID_CONFIG", "无效的配置参数").with_detail(reason)
+        Self::new("INVALID_CONFIG", "Invalid configuration").with_detail(reason)
     }
 
     pub fn invalid_tool_path(path: &str) -> Self {
-        Self::new("INVALID_TOOL_PATH", "无效的工具路径").with_detail(path)
+        Self::new("INVALID_TOOL_PATH", "Invalid tool path").with_detail(path)
     }
 
     pub fn capability_detection_failed(reason: &str) -> Self {
-        Self::new("CAPABILITY_DETECTION_FAILED", "设备能力检测失败")
+        Self::new("CAPABILITY_DETECTION_FAILED", "Device capability detection failed")
             .with_detail(reason)
-            .with_suggestion("请确认设备已连接且 scrcpy 版本支持 --list-encoders")
+            .with_suggestion("Make sure the device is connected and scrcpy supports --list-encoders")
     }
 
     pub fn internal_error(reason: &str) -> Self {
-        Self::new("INTERNAL_ERROR", "内部错误").with_detail(reason)
+        Self::new("INTERNAL_ERROR", "Internal error").with_detail(reason)
     }
 }
 
 #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
 fn adb_not_found_suggestion() -> &'static str {
-    "当前平台 (Linux ARM64) 未内置 adb，请通过系统包管理器安装后使用：\
-     sudo apt install adb，或在设置中配置自定义 adb 路径"
+    "Bundled adb is not available on this platform (Linux ARM64). Install via: sudo apt install adb, or configure a custom path in settings"
 }
 
 #[cfg(not(all(target_os = "linux", target_arch = "aarch64")))]
 fn adb_not_found_suggestion() -> &'static str {
-    "请使用内置 adb，或在设置中配置 adb 路径"
+    "Use bundled adb, or configure adb path in settings"
 }
 
 #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
 fn scrcpy_not_found_suggestion() -> &'static str {
-    "当前平台 (Linux ARM64) 未内置 scrcpy，请通过系统包管理器安装后使用：\
-     sudo apt install scrcpy，或在设置中配置自定义 scrcpy 路径"
+    "Bundled scrcpy is not available on this platform (Linux ARM64). Install via: sudo apt install scrcpy, or configure a custom path in settings"
 }
 
 #[cfg(not(all(target_os = "linux", target_arch = "aarch64")))]
 fn scrcpy_not_found_suggestion() -> &'static str {
-    "请使用内置 scrcpy，或在设置中配置 scrcpy 路径"
+    "Use bundled scrcpy, or configure scrcpy path in settings"
 }
 
 impl From<std::io::Error> for AppError {
@@ -137,13 +133,13 @@ impl From<std::io::Error> for AppError {
 
 impl From<rusqlite::Error> for AppError {
     fn from(err: rusqlite::Error) -> Self {
-        AppError::internal_error(&format!("数据库错误: {err}"))
+        AppError::internal_error(&format!("Database error: {err}"))
     }
 }
 
 impl From<serde_json::Error> for AppError {
     fn from(err: serde_json::Error) -> Self {
-        AppError::internal_error(&format!("序列化错误: {err}"))
+        AppError::internal_error(&format!("Serialization error: {err}"))
     }
 }
 

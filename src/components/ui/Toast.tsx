@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type JSX } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNotificationStore, type Notification, type NotificationType } from '../../stores/notificationStore'
 
 /* ── 精致的 SVG 图标 ──────────────────────────────────────── */
@@ -109,11 +110,12 @@ function ProgressBar({ duration, type }: { duration: number; type: NotificationT
 /* ── 关闭按钮 ────────────────────────────────────────────── */
 
 function CloseButton({ onClick }: { onClick: () => void }) {
+  const { t } = useTranslation("common");
   return (
     <button
       onClick={onClick}
       className="toast-close"
-      aria-label="关闭"
+      aria-label={t("buttons.close")}
     >
       <svg viewBox="0 0 16 16" fill="none">
         <path

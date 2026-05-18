@@ -1,0 +1,87 @@
+{
+  "ADB_NOT_FOUND": {
+    "message": "未检测到 adb",
+    "suggestion": "请使用内置 adb，或在设置中配置 adb 路径"
+  },
+  "ADB_NOT_FOUND_LINUX_ARM64": {
+    "suggestion": "当前平台 (Linux ARM64) 未内置 adb，请通过系统包管理器安装后使用：sudo apt install adb，或在设置中配置自定义 adb 路径"
+  },
+  "SCRCPY_NOT_FOUND": {
+    "message": "未检测到 scrcpy",
+    "suggestion": "请使用内置 scrcpy，或在设置中配置 scrcpy 路径"
+  },
+  "SCRCPY_NOT_FOUND_LINUX_ARM64": {
+    "suggestion": "当前平台 (Linux ARM64) 未内置 scrcpy，请通过系统包管理器安装后使用：sudo apt install scrcpy，或在设置中配置自定义 scrcpy 路径"
+  },
+  "DEVICE_NOT_FOUND": {
+    "message": "设备未找到"
+  },
+  "DEVICE_UNAUTHORIZED": {
+    "message": "设备未授权",
+    "suggestion": "请在 Android 手机上确认 USB 调试授权弹窗，然后重新扫描设备"
+  },
+  "DEVICE_OFFLINE": {
+    "message": "设备离线",
+    "suggestion": "请检查 USB 连接或重新插拔数据线"
+  },
+  "MIRROR_ALREADY_RUNNING": {
+    "message": "该设备已有运行中的投屏会话"
+  },
+  "MIRROR_START_FAILED": {
+    "message": "投屏启动失败"
+  },
+  "MIRROR_STOP_FAILED": {
+    "message": "投屏停止失败"
+  },
+  "WIRELESS_CONNECT_FAILED": {
+    "message": "无线连接失败",
+    "suggestion": "请确认手机和电脑在同一局域网，且手机已开启 USB 调试或无线调试"
+  },
+  "WIRELESS_IP_NOT_FOUND": {
+    "message": "未获取到设备局域网 IP",
+    "suggestion": "请确认手机已连接 WiFi，并与电脑处于同一局域网"
+  },
+  "WIRELESS_DISCOVERY_FAILED": {
+    "message": "无线设备扫描失败",
+    "suggestion": "请确认 ADB 可用，并已在 Android 无线调试页面开启无线调试"
+  },
+  "INVALID_CONFIG": {
+    "message": "无效的配置参数"
+  },
+  "INVALID_TOOL_PATH": {
+    "message": "无效的工具路径"
+  },
+  "CAPABILITY_DETECTION_FAILED": {
+    "message": "设备能力检测失败",
+    "suggestion": "请确认设备已连接且 scrcpy 版本支持 --list-encoders"
+  },
+  "INTERNAL_ERROR": {
+    "message": "内部错误"
+  },
+  "COMMAND_TIMEOUT": {
+    "message": "命令执行超时"
+  },
+  "COMMAND_FAILED": {
+    "message": "命令执行失败"
+  },
+  "VALIDATION": {
+    "serialEmpty": "设备序列号不能为空",
+    "serialInvalid": "设备序列号包含非法字符",
+    "pairingCodeEmpty": "配对码不能为空",
+    "ipEmpty": "IP 地址不能为空",
+    "ipInvalid": "IP 地址包含非法字符",
+    "addressEmpty": "无线设备地址不能为空",
+    "addressInvalid": "无线设备地址包含非法字符",
+    "portZero": "端口不能为 0",
+    "apkInvalid": "请选择有效的 .apk 文件",
+    "fileInvalid": "请选择有效的本地文件",
+    "shellEmpty": "ADB shell 命令不能为空",
+    "remoteDirEmpty": "远端目录不能为空",
+    "fileNameError": "无法读取本地文件名",
+    "invalidMaxSize": "无效的 maxSize",
+    "invalidBitRate": "无效的 videoBitRate",
+    "invalidFps": "无效的 maxFps",
+    "invalidCodec": "无效的 videoCodec",
+    "noEncoders": "未检测到任何视频编码器，可能 scrcpy 版本过旧或设备不支持"
+  }
+}

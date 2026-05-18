@@ -86,7 +86,7 @@ impl AndroidProvider {
         validate_wireless_host(host)?;
         validate_wireless_port(port)?;
         if pairing_code.trim().is_empty() {
-            return Err(AppError::invalid_config("配对码不能为空"));
+            return Err(AppError::invalid_config("Pairing code cannot be empty"));
         }
 
         let adb_path = self.resolve_adb()?;
@@ -180,27 +180,27 @@ impl AndroidProvider {
 fn validate_wireless_host(host: &str) -> Result<(), AppError> {
     let host = host.trim();
     if host.is_empty() {
-        return Err(AppError::invalid_config("IP 地址不能为空"));
+        return Err(AppError::invalid_config("IP address cannot be empty"));
     }
     if host.contains([';', '|', '&', '$', '`', '<', '>', '"', '\'']) {
-        return Err(AppError::invalid_config("IP 地址包含非法字符"));
+        return Err(AppError::invalid_config("IP address contains invalid characters"));
     }
     Ok(())
 }
 
 fn validate_wireless_endpoint(endpoint: &str) -> Result<(), AppError> {
     if endpoint.trim().is_empty() {
-        return Err(AppError::invalid_config("无线设备地址不能为空"));
+        return Err(AppError::invalid_config("Wireless device address cannot be empty"));
     }
     if endpoint.contains([';', '|', '&', '$', '`', '<', '>', '"', '\'']) {
-        return Err(AppError::invalid_config("无线设备地址包含非法字符"));
+        return Err(AppError::invalid_config("Wireless device address contains invalid characters"));
     }
     Ok(())
 }
 
 fn validate_wireless_port(port: u16) -> Result<(), AppError> {
     if port == 0 {
-        return Err(AppError::invalid_config("端口不能为 0"));
+        return Err(AppError::invalid_config("Port cannot be 0"));
     }
     Ok(())
 }
@@ -287,7 +287,7 @@ impl DeviceProvider for AndroidProvider {
         Ok(EnvironmentStatus {
             adb: adb_status,
             scrcpy: scrcpy_status,
-            provider_status: format!("运行中 v{APP_VERSION}"),
+            provider_status: format!("Running v{APP_VERSION}"),
         })
     }
 

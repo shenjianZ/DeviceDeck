@@ -115,7 +115,7 @@ export function Topbar({ theme, onToggleTheme, environment }: TopbarProps) {
           <button
             className="topbar-win-btn close"
             onClick={handleClose}
-            title={t("topbar:close", "关闭")}
+            title={t("topbar:close", "Close")}
             type="button"
           >
             <X size={12} />

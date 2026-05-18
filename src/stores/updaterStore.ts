@@ -5,26 +5,27 @@ import type { UpdateState } from "../lib/update-types";
 import type { Update, DownloadEvent } from "@tauri-apps/plugin-updater";
 import { useSettingsStore } from "./settingsStore";
 import { useNotificationStore } from "./notificationStore";
+import i18n from "../i18n";
 
 function classifyUpdateError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err);
   const lower = msg.toLowerCase();
   if (lower.includes("dns") || lower.includes("getaddr") || lower.includes("resolve")) {
-    return "网络连接失败，请检查网络设置";
+    return i18n.t("common:updater.dnsError");
   }
   if (lower.includes("timed out") || lower.includes("timeout") || lower.includes("connection refused")) {
-    return "无法连接到更新服务器";
+    return i18n.t("common:updater.serverUnreachable");
   }
   if (lower.includes("404") || lower.includes("not found")) {
-    return "未找到发布版本";
+    return i18n.t("common:updater.releaseNotFound");
   }
   if (lower.includes("cert") || lower.includes("tls") || lower.includes("ssl")) {
-    return "网络连接失败，请检查网络设置";
+    return i18n.t("common:updater.dnsError");
   }
   if (lower.includes("signature") || lower.includes("verify") || lower.includes("pubkey")) {
-    return "更新签名校验失败";
+    return i18n.t("common:updater.signatureFailed");
   }
-  return "未知错误";
+  return i18n.t("common:updater.unknownError");
 }
 
 type UpdaterStore = {
@@ -103,7 +104,7 @@ export const useUpdaterStore = create<UpdaterStore>((set, get) => ({
   downloadUpdate: async () => {
     const { pendingUpdate } = get();
     if (!pendingUpdate) {
-      useNotificationStore.getState().showError("没有可用的更新");
+      useNotificationStore.getState().showError(i18n.t("common:notifications.noUpdateAvailable"));
       return;
     }
 
@@ -149,7 +150,7 @@ export const useUpdaterStore = create<UpdaterStore>((set, get) => ({
           downloadedVersion: summary.version,
         },
       });
-      useNotificationStore.getState().showSuccess("更新下载完成");
+      useNotificationStore.getState().showSuccess(i18n.t("common:notifications.updateDownloaded"));
     } catch (err) {
       set({
         updateState: {
@@ -158,7 +159,7 @@ export const useUpdaterStore = create<UpdaterStore>((set, get) => ({
           error: classifyUpdateError(err),
         },
       });
-      useNotificationStore.getState().showError("下载更新失败");
+      useNotificationStore.getState().showError(i18n.t("common:notifications.updateDownloadFailed"));
     }
   },
 
@@ -170,7 +171,7 @@ export const useUpdaterStore = create<UpdaterStore>((set, get) => ({
       await installAppUpdate(pendingUpdate);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      useNotificationStore.getState().showError(`安装更新失败: ${message}`);
+      useNotificationStore.getState().showError(`${i18n.t("common:notifications.updateInstallFailed")}: ${message}`);
     }
   },
 

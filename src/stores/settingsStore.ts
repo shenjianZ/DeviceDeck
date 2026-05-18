@@ -3,6 +3,7 @@ import { tauriApi } from "../lib/tauri";
 import { useNotificationStore } from "./notificationStore";
 import { applyTheme } from "../lib/theme";
 import { defaultAdvancedMirrorConfig } from "../lib/presets";
+import i18n from "../i18n";
 import type { AppSettings, AppError } from "../types";
 
 interface SettingsStore {
@@ -95,11 +96,11 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       if (settings.fontSize) {
         applyFontSize(settings.fontSize);
       }
-      useNotificationStore.getState().showSuccess("设置已保存");
+      useNotificationStore.getState().showSuccess(i18n.t("common:toast.saveSuccess"));
     } catch (e: unknown) {
       const err = e as AppError;
       set({ error: err });
-      useNotificationStore.getState().showError("保存设置失败", err.message, err.suggestion);
+      useNotificationStore.getState().showError(i18n.t("common:toast.saveFailed"), err.message, err.suggestion);
     }
   },
 
@@ -110,11 +111,11 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       if (settings.fontSize) {
         applyFontSize(settings.fontSize);
       }
-      useNotificationStore.getState().showSuccess("设置已重置为默认值");
+      useNotificationStore.getState().showSuccess(i18n.t("common:toast.resetSuccess"));
     } catch (e: unknown) {
       const err = e as AppError;
       set({ error: err });
-      useNotificationStore.getState().showError("重置设置失败", err.message, err.suggestion);
+      useNotificationStore.getState().showError(i18n.t("common:toast.resetFailed"), err.message, err.suggestion);
     }
   },
 
@@ -128,7 +129,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     } catch (e: unknown) {
       const err = e as AppError;
       set({ error: err });
-      useNotificationStore.getState().showError("保存设置失败", err.message, err.suggestion);
+      useNotificationStore.getState().showError(i18n.t("common:toast.saveFailed"), err.message, err.suggestion);
     }
   },
 }));

@@ -11,11 +11,11 @@ pub struct Database {
 impl Database {
     pub fn open(data_dir: &Path) -> Result<Self, AppError> {
         std::fs::create_dir_all(data_dir)
-            .map_err(|e| AppError::internal_error(&format!("无法创建数据目录: {e}")))?;
+            .map_err(|e| AppError::internal_error(&format!("Failed to create data directory: {e}")))?;
 
         let db_path = data_dir.join("devicedeck.db");
         let conn = Connection::open(&db_path)
-            .map_err(|e| AppError::internal_error(&format!("无法打开数据库: {e}")))?;
+            .map_err(|e| AppError::internal_error(&format!("Failed to open database: {e}")))?;
 
         let db = Self {
             conn: Mutex::new(conn),
@@ -54,7 +54,7 @@ impl Database {
             CREATE INDEX IF NOT EXISTS idx_logs_time ON logs(time);
             ",
         )
-        .map_err(|e| AppError::internal_error(&format!("数据库迁移失败: {e}")))?;
+        .map_err(|e| AppError::internal_error(&format!("Database migration failed: {e}")))?;
 
         Ok(())
     }

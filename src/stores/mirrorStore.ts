@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { tauriApi } from "../lib/tauri";
 import { defaultAdvancedMirrorConfig } from "../lib/presets";
 import { useNotificationStore } from "./notificationStore";
+import i18n from "../i18n";
 import type { MirrorConfig, MirrorSession, AppError } from "../types";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 
@@ -61,11 +62,11 @@ export const useMirrorStore = create<MirrorStore>((set, get) => ({
       await tauriApi.startMirror(serial, get().config);
       await get().refreshSessions();
       set({ isStarting: false });
-      useNotificationStore.getState().showSuccess("投屏已启动", `设备 ${serial}`);
+      useNotificationStore.getState().showSuccess(i18n.t("common:notifications.mirrorStarted"), serial);
     } catch (e: unknown) {
       const err = e as AppError;
       set({ error: err, isStarting: false });
-      useNotificationStore.getState().showError("投屏启动失败", err.message, err.suggestion);
+      useNotificationStore.getState().showError(i18n.t("common:notifications.mirrorStartFailed"), err.message, err.suggestion);
     }
   },
 
@@ -75,11 +76,11 @@ export const useMirrorStore = create<MirrorStore>((set, get) => ({
       await tauriApi.startWirelessMirror(serial, get().config, port);
       await get().refreshSessions();
       set({ isStarting: false });
-      useNotificationStore.getState().showSuccess("无线投屏已启动", `设备 ${serial}`);
+      useNotificationStore.getState().showSuccess(i18n.t("common:notifications.wirelessMirrorStarted"), serial);
     } catch (e: unknown) {
       const err = e as AppError;
       set({ error: err, isStarting: false });
-      useNotificationStore.getState().showError("无线投屏启动失败", err.message, err.suggestion);
+      useNotificationStore.getState().showError(i18n.t("common:notifications.wirelessMirrorStartFailed"), err.message, err.suggestion);
     }
   },
 
@@ -89,11 +90,11 @@ export const useMirrorStore = create<MirrorStore>((set, get) => ({
       await tauriApi.connectWirelessAndStartMirror(host, port, get().config);
       await get().refreshSessions();
       set({ isStarting: false });
-      useNotificationStore.getState().showSuccess("无线连接并投屏成功", `${host}:${port}`);
+      useNotificationStore.getState().showSuccess(i18n.t("common:notifications.wirelessMirrorConnectSuccess"), `${host}:${port}`);
     } catch (e: unknown) {
       const err = e as AppError;
       set({ error: err, isStarting: false });
-      useNotificationStore.getState().showError("无线连接失败", err.message, err.suggestion);
+      useNotificationStore.getState().showError(i18n.t("common:notifications.wirelessConnectAndMirrorFailed"), err.message, err.suggestion);
     }
   },
 
@@ -103,11 +104,11 @@ export const useMirrorStore = create<MirrorStore>((set, get) => ({
       await tauriApi.stopMirror(sessionId);
       await get().refreshSessions();
       set({ isStopping: null });
-      useNotificationStore.getState().showSuccess("投屏已停止");
+      useNotificationStore.getState().showSuccess(i18n.t("common:notifications.mirrorStopped"));
     } catch (e: unknown) {
       const err = e as AppError;
       set({ error: err, isStopping: null });
-      useNotificationStore.getState().showError("停止投屏失败", err.message, err.suggestion);
+      useNotificationStore.getState().showError(i18n.t("common:notifications.mirrorStopFailed"), err.message, err.suggestion);
     }
   },
 

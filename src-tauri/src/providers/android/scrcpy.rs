@@ -19,10 +19,10 @@ const DANGEROUS_CHARS: &[char] = &[
 
 pub fn validate_serial(serial: &str) -> Result<(), AppError> {
     if serial.is_empty() {
-        return Err(AppError::invalid_config("serial 不能为空"));
+        return Err(AppError::invalid_config("Serial cannot be empty"));
     }
     if serial.contains(DANGEROUS_CHARS) {
-        return Err(AppError::invalid_config("serial 包含非法字符"));
+        return Err(AppError::invalid_config("Serial contains invalid characters"));
     }
     Ok(())
 }
@@ -30,25 +30,25 @@ pub fn validate_serial(serial: &str) -> Result<(), AppError> {
 pub fn validate_config(config: &MirrorConfig) -> Result<(), AppError> {
     if !ALLOWED_SIZES.contains(&config.max_size.as_str()) {
         return Err(AppError::invalid_config(&format!(
-            "无效的 maxSize: {}，允许值: {:?}",
+            "Invalid maxSize: {}, allowed: {:?}",
             config.max_size, ALLOWED_SIZES
         )));
     }
     if !ALLOWED_BITRATES.contains(&config.video_bit_rate.as_str()) {
         return Err(AppError::invalid_config(&format!(
-            "无效的 videoBitRate: {}，允许值: {:?}",
+            "Invalid videoBitRate: {}, allowed: {:?}",
             config.video_bit_rate, ALLOWED_BITRATES
         )));
     }
     if !ALLOWED_FPS.contains(&config.max_fps.as_str()) {
         return Err(AppError::invalid_config(&format!(
-            "无效的 maxFps: {}，允许值: {:?}",
+            "Invalid maxFps: {}, allowed: {:?}",
             config.max_fps, ALLOWED_FPS
         )));
     }
     if !ALLOWED_VIDEO_CODECS.contains(&config.video_codec.as_str()) {
         return Err(AppError::invalid_config(&format!(
-            "无效的 videoCodec: {}，允许值: {:?}",
+            "Invalid videoCodec: {}, allowed: {:?}",
             config.video_codec, ALLOWED_VIDEO_CODECS
         )));
     }
@@ -206,7 +206,7 @@ pub async fn execute_list_encoders(
 
     if !output.success {
         return Err(AppError::capability_detection_failed(&format!(
-            "scrcpy --list-encoders 执行失败: {}",
+            "scrcpy --list-encoders failed: {}",
             output.stderr
         )));
     }
@@ -214,7 +214,7 @@ pub async fn execute_list_encoders(
     let (encoders, codecs) = parser::parse_scrcpy_encoders(&output.stdout);
     if codecs.is_empty() {
         return Err(AppError::capability_detection_failed(
-            "未检测到任何视频编码器，可能 scrcpy 版本过旧或设备不支持",
+            "No video encoders detected. scrcpy may be outdated or device unsupported",
         ));
     }
 

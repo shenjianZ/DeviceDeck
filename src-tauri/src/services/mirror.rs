@@ -73,7 +73,7 @@ impl MirrorService {
         self.log_bus.scrcpy_info(
             serial,
             &format!(
-                "投屏已启动 — {}p / {} / {}fps",
+                "Mirror started — {}p / {} / {}fps",
                 config.max_size, config.video_bit_rate, config.max_fps
             ),
         );
@@ -92,14 +92,14 @@ impl MirrorService {
             self.android_provider.get_device_detail(serial).await?
         } else {
             self.log_bus
-                .adb_info(serial, &format!("正在启用无线调试端口 {port}"));
+                .adb_info(serial, &format!("Enabling wireless debugging port {port}"));
             self.android_provider
                 .enable_wireless_device(serial, port)
                 .await?
         };
 
         self.log_bus
-            .adb_info(&wireless_device.serial, "无线 ADB 已连接，开始投屏");
+            .adb_info(&wireless_device.serial, "Wireless ADB connected, starting mirror");
         self.start_mirror(&wireless_device.serial, config, session_repo)
             .await
     }
@@ -130,7 +130,7 @@ impl MirrorService {
         } else {
             self.log_bus.scrcpy_info(
                 "",
-                &format!("会话 {session_id} 没有运行中的 scrcpy 进程，已同步为停止状态"),
+                &format!("Session {session_id} has no running scrcpy process, synced to stopped"),
             );
         }
 

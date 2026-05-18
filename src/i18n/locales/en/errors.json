@@ -1,0 +1,87 @@
+{
+  "ADB_NOT_FOUND": {
+    "message": "adb not detected",
+    "suggestion": "Use bundled adb, or configure adb path in settings"
+  },
+  "ADB_NOT_FOUND_LINUX_ARM64": {
+    "suggestion": "Bundled adb is not available on this platform (Linux ARM64). Install via package manager: sudo apt install adb, or configure a custom adb path in settings"
+  },
+  "SCRCPY_NOT_FOUND": {
+    "message": "scrcpy not detected",
+    "suggestion": "Use bundled scrcpy, or configure scrcpy path in settings"
+  },
+  "SCRCPY_NOT_FOUND_LINUX_ARM64": {
+    "suggestion": "Bundled scrcpy is not available on this platform (Linux ARM64). Install via package manager: sudo apt install scrcpy, or configure a custom scrcpy path in settings"
+  },
+  "DEVICE_NOT_FOUND": {
+    "message": "Device not found"
+  },
+  "DEVICE_UNAUTHORIZED": {
+    "message": "Device unauthorized",
+    "suggestion": "Confirm the USB debugging authorization dialog on your Android device, then rescan"
+  },
+  "DEVICE_OFFLINE": {
+    "message": "Device offline",
+    "suggestion": "Check USB connection or reconnect the cable"
+  },
+  "MIRROR_ALREADY_RUNNING": {
+    "message": "A mirror session is already running on this device"
+  },
+  "MIRROR_START_FAILED": {
+    "message": "Failed to start mirroring"
+  },
+  "MIRROR_STOP_FAILED": {
+    "message": "Failed to stop mirroring"
+  },
+  "WIRELESS_CONNECT_FAILED": {
+    "message": "Wireless connection failed",
+    "suggestion": "Make sure your phone and computer are on the same network, and USB debugging or wireless debugging is enabled"
+  },
+  "WIRELESS_IP_NOT_FOUND": {
+    "message": "Could not get device LAN IP",
+    "suggestion": "Make sure your phone is connected to WiFi and on the same network as your computer"
+  },
+  "WIRELESS_DISCOVERY_FAILED": {
+    "message": "Wireless device discovery failed",
+    "suggestion": "Make sure ADB is available and wireless debugging is enabled in Android settings"
+  },
+  "INVALID_CONFIG": {
+    "message": "Invalid configuration"
+  },
+  "INVALID_TOOL_PATH": {
+    "message": "Invalid tool path"
+  },
+  "CAPABILITY_DETECTION_FAILED": {
+    "message": "Device capability detection failed",
+    "suggestion": "Make sure the device is connected and scrcpy supports --list-encoders"
+  },
+  "INTERNAL_ERROR": {
+    "message": "Internal error"
+  },
+  "COMMAND_TIMEOUT": {
+    "message": "Command timed out"
+  },
+  "COMMAND_FAILED": {
+    "message": "Command failed"
+  },
+  "VALIDATION": {
+    "serialEmpty": "Device serial cannot be empty",
+    "serialInvalid": "Device serial contains invalid characters",
+    "pairingCodeEmpty": "Pairing code cannot be empty",
+    "ipEmpty": "IP address cannot be empty",
+    "ipInvalid": "IP address contains invalid characters",
+    "addressEmpty": "Wireless device address cannot be empty",
+    "addressInvalid": "Wireless device address contains invalid characters",
+    "portZero": "Port cannot be 0",
+    "apkInvalid": "Please select a valid .apk file",
+    "fileInvalid": "Please select a valid local file",
+    "shellEmpty": "ADB shell command cannot be empty",
+    "remoteDirEmpty": "Remote directory cannot be empty",
+    "fileNameError": "Cannot read local file name",
+    "invalidMaxSize": "Invalid maxSize",
+    "invalidBitRate": "Invalid videoBitRate",
+    "invalidFps": "Invalid maxFps",
+    "invalidCodec": "Invalid videoCodec",
+    "noEncoders": "No video encoders detected. scrcpy may be outdated or the device may not support encoding"
+  }
+}

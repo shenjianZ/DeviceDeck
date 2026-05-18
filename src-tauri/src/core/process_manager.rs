@@ -55,12 +55,12 @@ impl ProcessManager {
 
         let pid = child
             .id()
-            .ok_or_else(|| AppError::mirror_start_failed("无法获取 scrcpy 进程 ID"))?;
+            .ok_or_else(|| AppError::mirror_start_failed("Cannot get scrcpy process ID"))?;
 
         self.log_bus.scrcpy_info(
             device_serial,
             &format!(
-                "scrcpy 启动: pid={pid}, path={}, cwd={}, args={}",
+                "scrcpy started: pid={pid}, path={}, cwd={}, args={}",
                 scrcpy_path.display(),
                 working_dir.display(),
                 args.join(" ")
@@ -133,9 +133,9 @@ impl ProcessManager {
                 Err(error) => format!("wait_error={error}"),
             };
             if exit_ok {
-                bus.scrcpy_info(&serial, &format!("scrcpy 进程已退出 ({exit_desc})"));
+                bus.scrcpy_info(&serial, &format!("scrcpy process exited ({exit_desc})"));
             } else {
-                bus.scrcpy_error(&serial, &format!("scrcpy 进程异常退出 ({exit_desc})"));
+                bus.scrcpy_error(&serial, &format!("scrcpy process exited abnormally ({exit_desc})"));
             }
 
             let repo = SessionRepository::new(&db);
@@ -145,7 +145,7 @@ impl ProcessManager {
                 SessionStatus::Failed
             };
             if let Err(error) = repo.update_session_status(&sid, status, Some(now_millis())) {
-                bus.scrcpy_error(&serial, &format!("更新会话状态失败: {error}"));
+                bus.scrcpy_error(&serial, &format!("Failed to update session state: {error}"));
             }
 
             if let Err(e) = app_handle.emit("mirror://session-updated", ()) {
@@ -182,7 +182,7 @@ impl ProcessManager {
 
         kill_process_tree(process.process_id).await?;
         self.log_bus
-            .scrcpy_info(&process.device_serial, "投屏已停止");
+            .scrcpy_info(&process.device_serial, "Mirror stopped");
         Ok(())
     }
 
@@ -203,7 +203,7 @@ impl ProcessManager {
         for (_, process) in processes.drain() {
             let _ = kill_process_tree(process.process_id).await;
             self.log_bus
-                .scrcpy_info(&process.device_serial, "应用关闭，投屏已停止");
+                .scrcpy_info(&process.device_serial, "App closing, mirror stopped");
         }
     }
 }

@@ -25,7 +25,7 @@ impl SettingsRepository {
         }
 
         let settings: AppSettings = serde_json::from_str(&content).unwrap_or_else(|e| {
-            eprintln!("配置文件损坏，使用默认配置: {e}");
+            eprintln!("Config file corrupted, using defaults: {e}");
             AppSettings::default()
         });
 

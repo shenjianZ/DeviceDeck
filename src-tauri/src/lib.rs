@@ -43,9 +43,9 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .setup(move |app| {
-            let data_dir = core::data_dir::ensure_data_dir().expect("无法初始化数据目录");
+            let data_dir = core::data_dir::ensure_data_dir().expect("Failed to initialize data directory");
 
-            let db = Arc::new(Database::open(&data_dir).expect("无法初始化数据库"));
+            let db = Arc::new(Database::open(&data_dir).expect("Failed to initialize database"));
 
             let settings_repo = SettingsRepository::new(&data_dir);
             let settings = settings_repo.load().unwrap_or_default();
@@ -82,11 +82,11 @@ pub fn run() {
             // 启动时清理旧日志
             let log_repo = LogRepository::new(&db);
             if let Err(e) = log_repo.cleanup_old_logs(log_retention_days) {
-                eprintln!("清理旧日志失败: {e}");
+                eprintln!("Failed to cleanup old logs: {e}");
             }
 
             // 启动日志
-            log_bus.system_info(&format!("DeviceDeck v{} 启动", config::APP_VERSION));
+            log_bus.system_info(&format!("DeviceDeck v{} started", config::APP_VERSION));
 
             // 窗口关闭时杀掉所有 scrcpy 进程
             if let Some(window) = app.get_webview_window("main") {

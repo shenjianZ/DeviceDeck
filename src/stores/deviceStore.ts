@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { tauriApi } from "../lib/tauri";
 import { useNotificationStore } from "./notificationStore";
 import { useMirrorStore } from "./mirrorStore";
+import i18n from "../i18n";
 import type {
   DeviceInfo,
   EnvironmentStatus,
@@ -74,12 +75,12 @@ export const useDeviceStore = create<DeviceStore>((set) => ({
       const devices = await tauriApi.scanDevices();
       set({ devices, isScanning: false });
       if (!silent) {
-        useNotificationStore.getState().showSuccess("设备扫描完成", `发现 ${devices.length} 个设备`);
+        useNotificationStore.getState().showSuccess(i18n.t("common:notifications.scanComplete"), i18n.t("common:notifications.devicesFound", { count: devices.length }));
       }
     } catch (e: unknown) {
       const err = e as AppError;
       set({ error: err, isScanning: false });
-      useNotificationStore.getState().showError("设备扫描失败", err.message, err.suggestion);
+      useNotificationStore.getState().showError(i18n.t("common:notifications.scanFailed"), err.message, err.suggestion);
     }
   },
 
@@ -89,12 +90,12 @@ export const useDeviceStore = create<DeviceStore>((set) => ({
       const wirelessServices = await tauriApi.discoverWirelessDevices();
       set({ wirelessServices, isDiscoveringWireless: false });
       if (!silent) {
-        useNotificationStore.getState().showSuccess("无线设备扫描完成", `发现 ${wirelessServices.length} 个服务`);
+        useNotificationStore.getState().showSuccess(i18n.t("common:notifications.wirelessScanComplete"), i18n.t("common:notifications.servicesFound", { count: wirelessServices.length }));
       }
     } catch (e: unknown) {
       const err = e as AppError;
       set({ error: err, isDiscoveringWireless: false });
-      useNotificationStore.getState().showError("无线设备扫描失败", err.message, err.suggestion);
+      useNotificationStore.getState().showError(i18n.t("common:notifications.wirelessScanFailed"), err.message, err.suggestion);
     }
   },
 
@@ -121,14 +122,14 @@ export const useDeviceStore = create<DeviceStore>((set) => ({
         devices: upsertDevice(state.devices, device),
         selectedDeviceId: device.id,
         isWirelessBusy: false,
-        wirelessMessage: `已连接无线设备 ${device.serial}`,
+        wirelessMessage: i18n.t("common:notifications.connectedTo", { serial: device.serial }),
       }));
-      useNotificationStore.getState().showSuccess("无线设备已启用", `${device.serial}:${port}`);
+      useNotificationStore.getState().showSuccess(i18n.t("common:notifications.wirelessEnabled"), `${device.serial}:${port}`);
       return device;
     } catch (e: unknown) {
       const err = e as AppError;
       set({ error: err, isWirelessBusy: false });
-      useNotificationStore.getState().showError("启用无线设备失败", err.message, err.suggestion);
+      useNotificationStore.getState().showError(i18n.t("common:notifications.wirelessEnableFailed"), err.message, err.suggestion);
       return null;
     }
   },
@@ -141,14 +142,14 @@ export const useDeviceStore = create<DeviceStore>((set) => ({
         devices: upsertDevice(state.devices, device),
         selectedDeviceId: device.id,
         isWirelessBusy: false,
-        wirelessMessage: `已连接无线设备 ${device.serial}`,
+        wirelessMessage: i18n.t("common:notifications.connectedTo", { serial: device.serial }),
       }));
-      useNotificationStore.getState().showSuccess("无线设备已连接", `${host}:${port}`);
+      useNotificationStore.getState().showSuccess(i18n.t("common:notifications.wirelessConnected"), `${host}:${port}`);
       return device;
     } catch (e: unknown) {
       const err = e as AppError;
       set({ error: err, isWirelessBusy: false });
-      useNotificationStore.getState().showError("连接无线设备失败", err.message, err.suggestion);
+      useNotificationStore.getState().showError(i18n.t("common:notifications.wirelessConnectFailed"), err.message, err.suggestion);
       return null;
     }
   },
@@ -157,13 +158,13 @@ export const useDeviceStore = create<DeviceStore>((set) => ({
     set({ isWirelessBusy: true, error: null, wirelessMessage: null });
     try {
       const message = await tauriApi.pairWirelessDevice(host, port, pairingCode);
-      set({ isWirelessBusy: false, wirelessMessage: message || "无线调试配对成功" });
-      useNotificationStore.getState().showSuccess("配对成功", `${host}:${port}`);
+      set({ isWirelessBusy: false, wirelessMessage: message || i18n.t("common:notifications.pairSuccessWireless") });
+      useNotificationStore.getState().showSuccess(i18n.t("common:notifications.pairSuccess"), `${host}:${port}`);
       return true;
     } catch (e: unknown) {
       const err = e as AppError;
       set({ error: err, isWirelessBusy: false });
-      useNotificationStore.getState().showError("配对失败", err.message, err.suggestion);
+      useNotificationStore.getState().showError(i18n.t("common:notifications.pairFailed"), err.message, err.suggestion);
       return false;
     }
   },
@@ -176,14 +177,14 @@ export const useDeviceStore = create<DeviceStore>((set) => ({
         devices: state.devices.filter((device) => device.serial !== serial),
         selectedDeviceId: state.selectedDeviceId === serial ? null : state.selectedDeviceId,
         isWirelessBusy: false,
-        wirelessMessage: `已断开 ${serial}`,
+        wirelessMessage: i18n.t("common:notifications.disconnectedFrom", { serial }),
       }));
-      useNotificationStore.getState().showSuccess("设备已断开", serial);
+      useNotificationStore.getState().showSuccess(i18n.t("common:notifications.deviceDisconnected"), serial);
       return true;
     } catch (e: unknown) {
       const err = e as AppError;
       set({ error: err, isWirelessBusy: false });
-      useNotificationStore.getState().showError("断开设备失败", err.message, err.suggestion);
+      useNotificationStore.getState().showError(i18n.t("common:notifications.disconnectFailed"), err.message, err.suggestion);
       return false;
     }
   },
@@ -198,37 +199,37 @@ export const useDeviceStore = create<DeviceStore>((set) => ({
         capabilityReports: { ...state.capabilityReports, [serial]: recommendations },
         isDetectingCapabilities: false,
       }));
-      useNotificationStore.getState().showSuccess("能力检测完成", `设备 ${serial} 的推荐配置已生成`);
+      useNotificationStore.getState().showSuccess(i18n.t("common:notifications.capabilityComplete"), i18n.t("common:notifications.capabilityDetail", { serial }));
     } catch (e: unknown) {
       const err = e as AppError;
       set({ error: err, isDetectingCapabilities: false });
-      useNotificationStore.getState().showError("能力检测失败", err.message, err.suggestion);
+      useNotificationStore.getState().showError(i18n.t("common:notifications.capabilityFailed"), err.message, err.suggestion);
     }
   },
 
   applyRecommendedConfig: (_serial, config) => {
     useMirrorStore.getState().applyPreset(config);
-    useNotificationStore.getState().showSuccess("已应用配置", "推荐配置已应用到投屏参数");
+    useNotificationStore.getState().showSuccess(i18n.t("common:notifications.configApplied"), i18n.t("common:notifications.configAppliedDetail"));
   },
 
   takeScreenshot: async (serial, outputDirectory) => {
-    await runDeviceAction(set, () => tauriApi.takeDeviceScreenshot(serial, outputDirectory), "截图完成", "截图失败");
+    await runDeviceAction(set, () => tauriApi.takeDeviceScreenshot(serial, outputDirectory), "screenshotComplete", "screenshotFailed");
   },
 
   installApk: async (serial, apkPath) => {
-    await runDeviceAction(set, () => tauriApi.installDeviceApk(serial, apkPath), "APK 安装完成", "APK 安装失败");
+    await runDeviceAction(set, () => tauriApi.installDeviceApk(serial, apkPath), "apkInstalled", "apkInstallFailed");
   },
 
   pushFile: async (serial, localPath, remoteDirectory) => {
-    await runDeviceAction(set, () => tauriApi.pushDeviceFile(serial, localPath, remoteDirectory), "文件发送完成", "文件发送失败");
+    await runDeviceAction(set, () => tauriApi.pushDeviceFile(serial, localPath, remoteDirectory), "fileSent", "fileSendFailed");
   },
 
   runKeyAction: async (serial, action) => {
-    await runDeviceAction(set, () => tauriApi.runDeviceKeyAction(serial, action), "快捷操作完成", "快捷操作失败");
+    await runDeviceAction(set, () => tauriApi.runDeviceKeyAction(serial, action), "keyActionComplete", "keyActionFailed");
   },
 
   runShellCommand: async (serial, command) => {
-    await runDeviceAction(set, () => tauriApi.runAdbShellCommand(serial, command), "ADB 命令完成", "ADB 命令失败");
+    await runDeviceAction(set, () => tauriApi.runAdbShellCommand(serial, command), "adbCommandComplete", "adbCommandFailed");
   },
 }));
 
@@ -241,18 +242,18 @@ function upsertDevice(devices: DeviceInfo[], device: DeviceInfo): DeviceInfo[] {
 async function runDeviceAction(
   set: (partial: Partial<DeviceStore>) => void,
   action: () => Promise<{ message: string; outputPath?: string | null; stdout?: string | null }>,
-  successTitle: string,
-  errorTitle: string
+  successKey: string,
+  errorKey: string
 ) {
   set({ isDeviceActionBusy: true, error: null });
   try {
     const result = await action();
     set({ isDeviceActionBusy: false });
     const detail = result.outputPath || result.stdout || result.message;
-    useNotificationStore.getState().showSuccess(successTitle, detail);
+    useNotificationStore.getState().showSuccess(i18n.t(`common:notifications.${successKey}`), detail);
   } catch (e: unknown) {
     const err = e as AppError;
     set({ error: err, isDeviceActionBusy: false });
-    useNotificationStore.getState().showError(errorTitle, err.message, err.suggestion || err.detail || undefined);
+    useNotificationStore.getState().showError(i18n.t(`common:notifications.${errorKey}`), err.message, err.suggestion || err.detail || undefined);
   }
 }

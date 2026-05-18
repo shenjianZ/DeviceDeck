@@ -16,7 +16,7 @@ pub async fn execute_adb_devices(adb_path: &Path) -> Result<Vec<RawDevice>, AppE
     let output = ShellRunner::execute(adb_path, &["devices", "-l"]).await?;
     if !output.success {
         return Err(AppError::internal_error(&format!(
-            "adb devices 执行失败: {}",
+            "adb devices failed: {}",
             output.stderr
         )));
     }
@@ -211,13 +211,13 @@ pub async fn execute_screenshot(
             .output(),
     )
     .await
-    .map_err(|_| AppError::internal_error("截图命令执行超时"))?
-    .map_err(|e| AppError::internal_error(&format!("截图命令执行失败: {e}")))?;
+    .map_err(|_| AppError::internal_error("Screenshot command timed out"))?
+    .map_err(|e| AppError::internal_error(&format!("Screenshot command failed: {e}")))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
         return Err(AppError::internal_error(&format!(
-            "截图失败: {}",
+            "Screenshot failed: {}",
             stderr.trim()
         )));
     }
@@ -225,7 +225,7 @@ pub async fn execute_screenshot(
     tokio::fs::write(&output_path, output.stdout).await?;
 
     Ok(DeviceActionResult {
-        message: "截图已保存".into(),
+        message: "Screenshot saved".into(),
         output_path: Some(output_path.to_string_lossy().into_owned()),
         stdout: None,
         stderr: None,
@@ -240,7 +240,7 @@ pub async fn execute_install_apk(
     validate_device_serial(serial)?;
     let apk = PathBuf::from(apk_path);
     if !apk.is_file() || apk.extension().and_then(|value| value.to_str()) != Some("apk") {
-        return Err(AppError::invalid_config("请选择有效的 .apk 文件"));
+        return Err(AppError::invalid_config("Please select a valid .apk file"));
     }
     let apk_arg = apk.to_string_lossy().into_owned();
     let output = ShellRunner::execute_with_timeout(
@@ -249,7 +249,7 @@ pub async fn execute_install_apk(
         std::time::Duration::from_secs(120),
     )
     .await?;
-    adb_action_result("APK 安装完成", output)
+    adb_action_result("APK installed", output)
 }
 
 pub async fn execute_push_file(
@@ -261,7 +261,7 @@ pub async fn execute_push_file(
     validate_device_serial(serial)?;
     let local = PathBuf::from(local_path);
     if !local.is_file() {
-        return Err(AppError::invalid_config("请选择有效的本地文件"));
+        return Err(AppError::invalid_config("Please select a valid local file"));
     }
     let remote_directory = normalize_remote_push_directory(remote_directory)?;
     let mkdir_output = ShellRunner::execute_with_timeout(
@@ -270,7 +270,7 @@ pub async fn execute_push_file(
         std::time::Duration::from_secs(10),
     )
     .await?;
-    adb_action_result("远端目录创建完成", mkdir_output)?;
+    adb_action_result("Remote directory created", mkdir_output)?;
 
     let remote = build_remote_push_target(&local, remote_directory)?;
     let local_arg = local.to_string_lossy().into_owned();
@@ -280,7 +280,7 @@ pub async fn execute_push_file(
         std::time::Duration::from_secs(120),
     )
     .await?;
-    let mut result = adb_action_result("文件已发送", output)?;
+    let mut result = adb_action_result("File sent", output)?;
     result.output_path = Some(remote.clone());
     result.stderr = merge_optional_output(
         result.stderr,
@@ -305,7 +305,7 @@ pub async fn execute_key_action(
             let result = ShellRunner::execute_with_timeout(adb_path, &primary, timeout).await;
             if let Ok(output) = result {
                 if output.success {
-                    return adb_action_result("屏幕已关闭", output);
+                    return adb_action_result("Screen turned off", output);
                 }
             }
             let fallback = vec![
@@ -319,14 +319,14 @@ pub async fn execute_key_action(
                 "0",
             ];
             let output = ShellRunner::execute_with_timeout(adb_path, &fallback, timeout).await?;
-            adb_action_result("屏幕亮度已调至最低", output)
+            adb_action_result("Screen brightness set to minimum", output)
         }
         DeviceKeyAction::ScreenRestore => {
             let primary = vec!["-s", serial, "shell", "cmd", "display", "power-on"];
             let result = ShellRunner::execute_with_timeout(adb_path, &primary, timeout).await;
             if let Ok(output) = result {
                 if output.success {
-                    return adb_action_result("屏幕已恢复", output);
+                    return adb_action_result("Screen restored", output);
                 }
             }
             let fallback = vec![
@@ -340,7 +340,7 @@ pub async fn execute_key_action(
                 "1",
             ];
             let output = ShellRunner::execute_with_timeout(adb_path, &fallback, timeout).await?;
-            adb_action_result("屏幕亮度已恢复", output)
+            adb_action_result("Screen brightness restored", output)
         }
         _ => {
             let args = match action {
@@ -382,7 +382,7 @@ pub async fn execute_key_action(
                 _ => unreachable!(),
             };
             let output = ShellRunner::execute_with_timeout(adb_path, &args, timeout).await?;
-            adb_action_result("快捷操作已执行", output)
+            adb_action_result("Key action completed", output)
         }
     }
 }
@@ -396,14 +396,14 @@ pub async fn execute_shell_command(
     validate_device_serial(serial)?;
     let command = command.trim();
     if command.is_empty() {
-        return Err(AppError::invalid_config("ADB shell 命令不能为空"));
+        return Err(AppError::invalid_config("ADB shell command cannot be empty"));
     }
     let timeout =
         std::time::Duration::from_millis(timeout_ms.unwrap_or(30_000).clamp(1_000, 120_000));
     let output =
         ShellRunner::execute_with_timeout(adb_path, &["-s", serial, "shell", command], timeout)
             .await?;
-    adb_action_result("ADB shell 命令已执行", output)
+    adb_action_result("ADB shell command executed", output)
 }
 
 fn adb_action_result(
@@ -438,14 +438,14 @@ fn normalize_remote_push_directory(remote_directory: &str) -> Result<&str, AppEr
         remote_directory.trim_end_matches('/')
     };
     if remote_directory.is_empty() {
-        return Err(AppError::invalid_config("远端目录不能为空"));
+        return Err(AppError::invalid_config("Remote directory cannot be empty"));
     }
     Ok(remote_directory)
 }
 
 fn build_remote_push_target(local: &Path, remote_directory: &str) -> Result<String, AppError> {
     let file_name =
-        local_file_name(local).ok_or_else(|| AppError::invalid_config("无法读取本地文件名"))?;
+        local_file_name(local).ok_or_else(|| AppError::invalid_config("Cannot read local file name"))?;
     let remote_directory = normalize_remote_push_directory(remote_directory)?;
     Ok(format!("{}/{}", remote_directory, file_name))
 }
@@ -486,7 +486,7 @@ async fn refresh_android_file_index(
         Ok(())
     } else {
         Err(format!(
-            "文件索引刷新失败: {}",
+            "File index refresh failed: {}",
             command_output_detail(&output)
         ))
     }
@@ -526,7 +526,7 @@ fn command_output_detail(output: &crate::sidecar::shell_runner::CommandOutput) -
     let combined = format!("{}\n{}", output.stdout.trim(), output.stderr.trim());
     let detail = combined.trim();
     if detail.is_empty() {
-        "adb 未返回详细错误".into()
+        "adb returned no detailed error".into()
     } else {
         detail.into()
     }
@@ -534,10 +534,10 @@ fn command_output_detail(output: &crate::sidecar::shell_runner::CommandOutput) -
 
 fn validate_device_serial(serial: &str) -> Result<(), AppError> {
     if serial.trim().is_empty() {
-        return Err(AppError::invalid_config("设备序列号不能为空"));
+        return Err(AppError::invalid_config("Device serial cannot be empty"));
     }
     if serial.contains([';', '|', '&', '$', '`', '<', '>', '"', '\'']) {
-        return Err(AppError::invalid_config("设备序列号包含非法字符"));
+        return Err(AppError::invalid_config("Device serial contains invalid characters"));
     }
     Ok(())
 }

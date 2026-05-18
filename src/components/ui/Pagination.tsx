@@ -1,24 +1,15 @@
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 interface PaginationProps {
-  /** 当前页码 */
   page: number;
-  /** 总页数 */
   totalPages: number;
-  /** 总记录数 */
   total: number;
-  /** 每页大小 */
   pageSize: number;
-  /** 是否正在加载 */
   isLoading?: boolean;
-  /** 页码变化回调 */
   onPageChange: (page: number) => void;
 }
 
-/**
- * 分页组件
- * 提供首页、上一页、页码显示、下一页、末页的导航功能
- */
 export function Pagination({
   page,
   totalPages,
@@ -27,6 +18,8 @@ export function Pagination({
   isLoading = false,
   onPageChange,
 }: PaginationProps) {
+  const { t } = useTranslation("common");
+
   if (totalPages <= 1) {
     return null;
   }
@@ -34,18 +27,15 @@ export function Pagination({
   const startItem = (page - 1) * pageSize + 1;
   const endItem = Math.min(page * pageSize, total);
 
-  // 生成页码按钮
   const getPageNumbers = () => {
     const pages: (number | "...")[] = [];
     const maxVisible = 7;
 
     if (totalPages <= maxVisible) {
-      // 总页数少，全部显示
       for (let i = 1; i <= totalPages; i++) {
         pages.push(i);
       }
     } else {
-      // 总页数多，显示部分
       pages.push(1);
 
       if (page > 3) {
@@ -72,31 +62,28 @@ export function Pagination({
   return (
     <div className="pagination">
       <div className="pagination-info">
-        显示 {startItem}-{endItem} 条，共 {total} 条
+        {t("pagination.info", { start: startItem, end: endItem, total })}
       </div>
 
       <div className="pagination-controls">
-        {/* 首页 */}
         <button
           className="pagination-btn"
           onClick={() => onPageChange(1)}
           disabled={page === 1 || isLoading}
-          title="首页"
+          title={t("pagination.first")}
         >
           <ChevronsLeft size={14} />
         </button>
 
-        {/* 上一页 */}
         <button
           className="pagination-btn"
           onClick={() => onPageChange(page - 1)}
           disabled={page === 1 || isLoading}
-          title="上一页"
+          title={t("pagination.prev")}
         >
           <ChevronLeft size={14} />
         </button>
 
-        {/* 页码 */}
         {getPageNumbers().map((pageNum, index) =>
           pageNum === "..." ? (
             <span key={`ellipsis-${index}`} className="pagination-ellipsis">
@@ -116,30 +103,27 @@ export function Pagination({
           )
         )}
 
-        {/* 下一页 */}
         <button
           className="pagination-btn"
           onClick={() => onPageChange(page + 1)}
           disabled={page === totalPages || isLoading}
-          title="下一页"
+          title={t("pagination.next")}
         >
           <ChevronRight size={14} />
         </button>
 
-        {/* 末页 */}
         <button
           className="pagination-btn"
           onClick={() => onPageChange(totalPages)}
           disabled={page === totalPages || isLoading}
-          title="末页"
+          title={t("pagination.last")}
         >
           <ChevronsRight size={14} />
         </button>
       </div>
 
-      {/* 快速跳转 */}
       <div className="pagination-jump">
-        <span>跳转到</span>
+        <span>{t("pagination.jumpTo")}</span>
         <input
           type="number"
           min={1}
@@ -154,7 +138,7 @@ export function Pagination({
           className="pagination-jump-input"
           disabled={isLoading}
         />
-        <span>页</span>
+        <span>{t("pagination.page")}</span>
       </div>
     </div>
   );
