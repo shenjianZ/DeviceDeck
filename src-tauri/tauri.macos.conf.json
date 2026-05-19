@@ -4,9 +4,13 @@
       "binaries/macos-aarch64/adb": "binaries/macos-aarch64/adb",
       "binaries/macos-aarch64/scrcpy": "binaries/macos-aarch64/scrcpy",
       "binaries/macos-aarch64/scrcpy-server": "binaries/macos-aarch64/scrcpy-server",
+      "binaries/macos-aarch64/scrcpy.png": "binaries/scrcpy.png",
+      "binaries/macos-aarch64/disconnected.png": "binaries/disconnected.png",
       "binaries/macos-x64/adb": "binaries/macos-x64/adb",
       "binaries/macos-x64/scrcpy": "binaries/macos-x64/scrcpy",
-      "binaries/macos-x64/scrcpy-server": "binaries/macos-x64/scrcpy-server"
+      "binaries/macos-x64/scrcpy-server": "binaries/macos-x64/scrcpy-server",
+      "binaries/macos-x64/scrcpy.png": "binaries/scrcpy.png",
+      "binaries/macos-x64/disconnected.png": "binaries/disconnected.png"
     }
   }
 }

@@ -25,6 +25,8 @@ describe("Windows Tauri bundled tools", () => {
         "binaries/windows-x64/adb.exe": "binaries/windows-x64/adb.exe",
         "binaries/windows-x64/scrcpy.exe": "binaries/windows-x64/scrcpy.exe",
         "binaries/windows-x64/scrcpy-server": "binaries/windows-x64/scrcpy-server",
+        "binaries/windows-x64/scrcpy.png": "binaries/scrcpy.png",
+        "binaries/windows-x64/disconnected.png": "binaries/disconnected.png",
         "binaries/windows-x64/AdbWinApi.dll": "binaries/windows-x64/AdbWinApi.dll",
         "binaries/windows-x64/AdbWinUsbApi.dll": "binaries/windows-x64/AdbWinUsbApi.dll",
         "binaries/windows-x64/SDL3.dll": "binaries/windows-x64/SDL3.dll",
@@ -47,6 +49,8 @@ describe("Linux Tauri bundled tools", () => {
       "binaries/linux-x64/adb": "binaries/linux-x64/adb",
       "binaries/linux-x64/scrcpy": "binaries/linux-x64/scrcpy",
       "binaries/linux-x64/scrcpy-server": "binaries/scrcpy-server",
+      "binaries/linux-x64/scrcpy.png": "binaries/scrcpy.png",
+      "binaries/linux-x64/disconnected.png": "binaries/disconnected.png",
     });
   });
 });
@@ -61,9 +65,13 @@ describe("macOS Tauri bundled tools", () => {
         "binaries/macos-aarch64/adb": "binaries/macos-aarch64/adb",
         "binaries/macos-aarch64/scrcpy": "binaries/macos-aarch64/scrcpy",
         "binaries/macos-aarch64/scrcpy-server": "binaries/macos-aarch64/scrcpy-server",
+        "binaries/macos-aarch64/scrcpy.png": "binaries/scrcpy.png",
+        "binaries/macos-aarch64/disconnected.png": "binaries/disconnected.png",
         "binaries/macos-x64/adb": "binaries/macos-x64/adb",
         "binaries/macos-x64/scrcpy": "binaries/macos-x64/scrcpy",
         "binaries/macos-x64/scrcpy-server": "binaries/macos-x64/scrcpy-server",
+        "binaries/macos-x64/scrcpy.png": "binaries/scrcpy.png",
+        "binaries/macos-x64/disconnected.png": "binaries/disconnected.png",
       }),
     );
   });
@@ -77,6 +85,8 @@ describe("Bundled tool files", () => {
       expectBundledFile(`binaries/${dir}/adb${executableExtension}`);
       expectBundledFile(`binaries/${dir}/scrcpy${executableExtension}`);
       expectBundledFile(`binaries/${dir}/scrcpy-server`);
+      expectBundledFile(`binaries/${dir}/scrcpy.png`);
+      expectBundledFile(`binaries/${dir}/disconnected.png`);
     }
   });
 });

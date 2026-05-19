@@ -3,7 +3,9 @@
     "resources": {
       "binaries/linux-x64/adb": "binaries/linux-x64/adb",
       "binaries/linux-x64/scrcpy": "binaries/linux-x64/scrcpy",
-      "binaries/linux-x64/scrcpy-server": "binaries/scrcpy-server"
+      "binaries/linux-x64/scrcpy-server": "binaries/scrcpy-server",
+      "binaries/linux-x64/scrcpy.png": "binaries/scrcpy.png",
+      "binaries/linux-x64/disconnected.png": "binaries/disconnected.png"
     }
   }
 }

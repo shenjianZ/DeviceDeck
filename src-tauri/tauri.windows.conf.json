@@ -4,6 +4,8 @@
       "binaries/windows-x64/adb.exe": "binaries/windows-x64/adb.exe",
       "binaries/windows-x64/scrcpy.exe": "binaries/windows-x64/scrcpy.exe",
       "binaries/windows-x64/scrcpy-server": "binaries/windows-x64/scrcpy-server",
+      "binaries/windows-x64/scrcpy.png": "binaries/scrcpy.png",
+      "binaries/windows-x64/disconnected.png": "binaries/disconnected.png",
       "binaries/windows-x64/AdbWinApi.dll": "binaries/windows-x64/AdbWinApi.dll",
       "binaries/windows-x64/AdbWinUsbApi.dll": "binaries/windows-x64/AdbWinUsbApi.dll",
       "binaries/windows-x64/SDL3.dll": "binaries/windows-x64/SDL3.dll",
