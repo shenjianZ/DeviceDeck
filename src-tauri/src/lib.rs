@@ -20,6 +20,7 @@ use services::device::DeviceService;
 use services::environment::EnvironmentService;
 use services::mirror::MirrorService;
 use services::settings::SettingsService;
+use services::transfer::TransferService;
 
 use core::app_state::AppState;
 
@@ -43,7 +44,8 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .setup(move |app| {
-            let data_dir = core::data_dir::ensure_data_dir().expect("Failed to initialize data directory");
+            let data_dir =
+                core::data_dir::ensure_data_dir().expect("Failed to initialize data directory");
 
             let db = Arc::new(Database::open(&data_dir).expect("Failed to initialize database"));
 
@@ -69,6 +71,8 @@ pub fn run() {
                 settings,
             );
             let settings_service = SettingsService::new(settings_repo);
+            let transfer_service =
+                TransferService::new(android_provider.clone(), app.handle().clone());
 
             let app_state = AppState::new(db.clone());
 
@@ -78,6 +82,7 @@ pub fn run() {
             app.manage(device_service);
             app.manage(mirror_service);
             app.manage(settings_service);
+            app.manage(transfer_service);
 
             // 启动时清理旧日志
             let log_repo = LogRepository::new(&db);
@@ -133,6 +138,16 @@ pub fn run() {
             commands::settings::get_settings,
             commands::settings::update_settings,
             commands::settings::reset_settings,
+            commands::transfer::list_device_directory,
+            commands::transfer::pull_device_file,
+            commands::transfer::delete_device_file,
+            commands::transfer::create_device_directory,
+            commands::transfer::create_device_file,
+            commands::transfer::push_device_file_streaming,
+            commands::transfer::pull_device_file_streaming,
+            commands::transfer::start_wifi_transfer,
+            commands::transfer::stop_wifi_transfer,
+            commands::transfer::get_wifi_transfer_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

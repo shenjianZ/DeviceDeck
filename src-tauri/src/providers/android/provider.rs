@@ -7,7 +7,7 @@ use crate::config::APP_VERSION;
 use crate::core::error::AppError;
 use crate::core::types::{
     AppSettings, DeviceActionResult, DeviceCapabilityReport, DeviceInfo, DeviceKeyAction,
-    DeviceStatus, EnvironmentStatus, RecommendedConfig, ToolStatus,
+    DeviceStatus, EnvironmentStatus, FileEntry, RecommendedConfig, ToolStatus,
 };
 use crate::providers::android::types::WirelessAdbService;
 use crate::providers::provider_trait::DeviceProvider;
@@ -37,6 +37,10 @@ impl AndroidProvider {
 
     fn resolve_adb(&self) -> Result<std::path::PathBuf, AppError> {
         BinaryResolver::resolve_adb(&self.current_settings())
+    }
+
+    pub fn get_adb_path(&self) -> Result<std::path::PathBuf, AppError> {
+        self.resolve_adb()
     }
 
     fn resolve_scrcpy(&self) -> Result<std::path::PathBuf, AppError> {
@@ -175,6 +179,52 @@ impl AndroidProvider {
         let adb_path = self.resolve_adb()?;
         adb::execute_shell_command(&adb_path, serial, command, timeout_ms).await
     }
+
+    pub async fn list_directory(
+        &self,
+        serial: &str,
+        path: &str,
+    ) -> Result<Vec<FileEntry>, AppError> {
+        let adb_path = self.resolve_adb()?;
+        adb::execute_list_directory(&adb_path, serial, path).await
+    }
+
+    pub async fn pull_file(
+        &self,
+        serial: &str,
+        remote_path: &str,
+        local_directory: &str,
+    ) -> Result<DeviceActionResult, AppError> {
+        let adb_path = self.resolve_adb()?;
+        adb::execute_pull_file(&adb_path, serial, remote_path, local_directory).await
+    }
+
+    pub async fn delete_file(
+        &self,
+        serial: &str,
+        path: &str,
+    ) -> Result<DeviceActionResult, AppError> {
+        let adb_path = self.resolve_adb()?;
+        adb::execute_delete_file(&adb_path, serial, path).await
+    }
+
+    pub async fn create_directory(
+        &self,
+        serial: &str,
+        path: &str,
+    ) -> Result<DeviceActionResult, AppError> {
+        let adb_path = self.resolve_adb()?;
+        adb::execute_create_directory(&adb_path, serial, path).await
+    }
+
+    pub async fn create_file(
+        &self,
+        serial: &str,
+        path: &str,
+    ) -> Result<DeviceActionResult, AppError> {
+        let adb_path = self.resolve_adb()?;
+        adb::execute_create_file(&adb_path, serial, path).await
+    }
 }
 
 fn validate_wireless_host(host: &str) -> Result<(), AppError> {
@@ -183,17 +233,23 @@ fn validate_wireless_host(host: &str) -> Result<(), AppError> {
         return Err(AppError::invalid_config("IP address cannot be empty"));
     }
     if host.contains([';', '|', '&', '$', '`', '<', '>', '"', '\'']) {
-        return Err(AppError::invalid_config("IP address contains invalid characters"));
+        return Err(AppError::invalid_config(
+            "IP address contains invalid characters",
+        ));
     }
     Ok(())
 }
 
 fn validate_wireless_endpoint(endpoint: &str) -> Result<(), AppError> {
     if endpoint.trim().is_empty() {
-        return Err(AppError::invalid_config("Wireless device address cannot be empty"));
+        return Err(AppError::invalid_config(
+            "Wireless device address cannot be empty",
+        ));
     }
     if endpoint.contains([';', '|', '&', '$', '`', '<', '>', '"', '\'']) {
-        return Err(AppError::invalid_config("Wireless device address contains invalid characters"));
+        return Err(AppError::invalid_config(
+            "Wireless device address contains invalid characters",
+        ));
     }
     Ok(())
 }

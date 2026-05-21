@@ -11,6 +11,7 @@ import zhDashboard from "./locales/zh-CN/dashboard.json";
 import zhLogs from "./locales/zh-CN/logs.json";
 import zhWelcome from "./locales/zh-CN/welcome.json";
 import zhErrors from "./locales/zh-CN/errors.json";
+import zhTransfer from "./locales/zh-CN/transfer.json";
 
 import enCommon from "./locales/en/common.json";
 import enSettings from "./locales/en/settings.json";
@@ -22,6 +23,7 @@ import enDashboard from "./locales/en/dashboard.json";
 import enLogs from "./locales/en/logs.json";
 import enWelcome from "./locales/en/welcome.json";
 import enErrors from "./locales/en/errors.json";
+import enTransfer from "./locales/en/transfer.json";
 
 const resources = {
   "zh-CN": {
@@ -35,6 +37,7 @@ const resources = {
     logs: zhLogs,
     welcome: zhWelcome,
     errors: zhErrors,
+    transfer: zhTransfer,
   },
   en: {
     common: enCommon,
@@ -47,6 +50,7 @@ const resources = {
     logs: enLogs,
     welcome: enWelcome,
     errors: enErrors,
+    transfer: enTransfer,
   },
 };
 
@@ -54,7 +58,7 @@ i18n.use(initReactI18next).init({
   resources,
   lng: localStorage.getItem("dd-locale") || "zh-CN",
   fallbackLng: "zh-CN",
-  ns: ["common", "settings", "topbar", "sidebar", "mirror", "devices", "dashboard", "logs", "welcome", "errors"],
+  ns: ["common", "settings", "topbar", "sidebar", "mirror", "devices", "dashboard", "logs", "welcome", "errors", "transfer"],
   defaultNS: "common",
   interpolation: {
     escapeValue: false,

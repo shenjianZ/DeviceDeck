@@ -2,6 +2,7 @@
   "dashboard": "Dashboard",
   "devices": "Devices",
   "mirror": "Mirror",
+  "transfer": "File Transfer",
   "settings": "Settings",
   "logs": "Logs"
 }

@@ -135,7 +135,10 @@ impl ProcessManager {
             if exit_ok {
                 bus.scrcpy_info(&serial, &format!("scrcpy process exited ({exit_desc})"));
             } else {
-                bus.scrcpy_error(&serial, &format!("scrcpy process exited abnormally ({exit_desc})"));
+                bus.scrcpy_error(
+                    &serial,
+                    &format!("scrcpy process exited abnormally ({exit_desc})"),
+                );
             }
 
             let repo = SessionRepository::new(&db);

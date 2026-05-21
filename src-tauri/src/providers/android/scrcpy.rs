@@ -22,7 +22,9 @@ pub fn validate_serial(serial: &str) -> Result<(), AppError> {
         return Err(AppError::invalid_config("Serial cannot be empty"));
     }
     if serial.contains(DANGEROUS_CHARS) {
-        return Err(AppError::invalid_config("Serial contains invalid characters"));
+        return Err(AppError::invalid_config(
+            "Serial contains invalid characters",
+        ));
     }
     Ok(())
 }

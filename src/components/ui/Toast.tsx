@@ -129,7 +129,7 @@ function CloseButton({ onClick }: { onClick: () => void }) {
   )
 }
 
-/* �─ Toast 单项 ───────────────────────────────────────────── */
+/* ── Toast 单项 ───────────────────────────────────────────── */
 
 function ToastItem({ notification }: { notification: Notification }) {
   const { removeNotification } = useNotificationStore()

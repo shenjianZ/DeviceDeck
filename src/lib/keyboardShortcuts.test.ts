@@ -40,6 +40,31 @@ describe('keyboard shortcut blocking', () => {
     expect(normalKey.defaultPrevented).toBe(false)
   })
 
+  it('allows select-all inside an app shortcut scope', () => {
+    const scope = document.createElement('div')
+    scope.dataset.ddAppShortcuts = 'file-transfer'
+    document.body.appendChild(scope)
+
+    const shortcut = keyboardEvent('a', { ctrlKey: true })
+
+    blockShortcutKeyDown(shortcut)
+
+    expect(shortcut.defaultPrevented).toBe(false)
+    scope.remove()
+  })
+
+  it('allows shortcuts in editable targets', () => {
+    const input = document.createElement('input')
+    document.body.appendChild(input)
+    const shortcut = keyboardEvent('a', { ctrlKey: true })
+    Object.defineProperty(shortcut, 'target', { value: input })
+
+    blockShortcutKeyDown(shortcut)
+
+    expect(shortcut.defaultPrevented).toBe(false)
+    input.remove()
+  })
+
   it('installs a capture-phase document shortcut blocker', () => {
     const addEventListener = vi.fn()
     const removeEventListener = vi.fn()
@@ -95,5 +120,18 @@ describe('keyboard shortcut blocking', () => {
     blockContextMenu(event)
 
     expect(event.defaultPrevented).toBe(true)
+  })
+
+  it('allows context menus inside an app context-menu scope', () => {
+    const scope = document.createElement('div')
+    scope.dataset.ddContextMenu = 'file-transfer'
+    document.body.appendChild(scope)
+    const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+    Object.defineProperty(event, 'target', { value: scope })
+
+    blockContextMenu(event)
+
+    expect(event.defaultPrevented).toBe(false)
+    scope.remove()
   })
 })

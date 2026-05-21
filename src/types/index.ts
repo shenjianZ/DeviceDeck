@@ -11,6 +11,9 @@ export type {
   RecommendedConfig,
   DeviceActionResult,
   DeviceKeyAction,
+  FileEntry,
+  WifiTransferStatus,
+  TransferProgress,
 } from "./device";
 export type {
   MirrorConfig,
@@ -26,4 +29,4 @@ export type {
 export type { AppLog, LogSource, LogLevel } from "./logs";
 export type { AppSettings, ToolStatus, EnvironmentStatus, AppError } from "./settings";
 
-export type Page = "dashboard" | "devices" | "mirror" | "logs" | "settings";
+export type Page = "dashboard" | "devices" | "mirror" | "logs" | "settings" | "transfer";

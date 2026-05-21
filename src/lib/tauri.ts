@@ -11,6 +11,9 @@ import type {
   RecommendedConfig,
   DeviceActionResult,
   DeviceKeyAction,
+  FileEntry,
+  WifiTransferStatus,
+  TransferProgress,
 } from "../types";
 
 /** 分页查询结果 */
@@ -53,6 +56,28 @@ export const tauriApi = {
   runAdbShellCommand: (serial: string, command: string, timeoutMs = 30000) =>
     invoke<DeviceActionResult>("run_adb_shell_command", { serial, command, timeoutMs }),
 
+  // File Transfer
+  listDeviceDirectory: (serial: string, path: string) =>
+    invoke<FileEntry[]>("list_device_directory", { serial, path }),
+  pullDeviceFile: (serial: string, remotePath: string, localDirectory: string) =>
+    invoke<DeviceActionResult>("pull_device_file", { serial, remotePath, localDirectory }),
+  deleteDeviceFile: (serial: string, path: string) =>
+    invoke<DeviceActionResult>("delete_device_file", { serial, path }),
+  createDeviceDirectory: (serial: string, path: string) =>
+    invoke<DeviceActionResult>("create_device_directory", { serial, path }),
+  createDeviceFile: (serial: string, path: string) =>
+    invoke<DeviceActionResult>("create_device_file", { serial, path }),
+  pushDeviceFileStreaming: (serial: string, localPath: string, remoteDirectory: string) =>
+    invoke<DeviceActionResult>("push_device_file_streaming", { serial, localPath, remoteDirectory }),
+  pullDeviceFileStreaming: (serial: string, remotePath: string, localDirectory: string) =>
+    invoke<DeviceActionResult>("pull_device_file_streaming", { serial, remotePath, localDirectory }),
+  startWifiTransfer: (port?: number) =>
+    invoke<WifiTransferStatus>("start_wifi_transfer", { port }),
+  stopWifiTransfer: () =>
+    invoke<void>("stop_wifi_transfer"),
+  getWifiTransferStatus: () =>
+    invoke<WifiTransferStatus>("get_wifi_transfer_status"),
+
   // Mirror
   startMirror: (serial: string, config: MirrorConfig) =>
     invoke<MirrorSession>("start_mirror", { serial, config }),
@@ -94,6 +119,8 @@ export const tauriApi = {
   // Events
   onLog: (handler: (log: AppLog) => void) =>
     listen<AppLog>("log://new", (e) => handler(e.payload)),
+  onTransferProgress: (handler: (progress: TransferProgress) => void) =>
+    listen<TransferProgress>("transfer://progress", (e) => handler(e.payload)),
   onSessionUpdated: (handler: (session: MirrorSession) => void) =>
     listen<MirrorSession>("mirror://session-updated", (e) =>
       handler(e.payload)

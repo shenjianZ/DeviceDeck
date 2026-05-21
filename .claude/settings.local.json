@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rtk cargo *)",
+      "Bash(rtk grep *)",
+      "Bash(rtk git *)",
+      "Bash(git checkout *)",
+      "mcp__gitnexus__impact",
+      "Bash(rtk tsc *)",
+      "mcp__gitnexus__detect_changes",
+      "Bash(pnpm build *)",
+      "WebSearch"
+    ]
+  }
+}

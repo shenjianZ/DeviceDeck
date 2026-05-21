@@ -74,3 +74,29 @@ export type DeviceKeyAction =
   | "turnScreenOff"
   | "screenBlack"
   | "screenRestore";
+
+export interface FileEntry {
+  name: string;
+  path: string;
+  isDirectory: boolean;
+  size?: number | null;
+  modified?: string | null;
+  permissions?: string | null;
+}
+
+export interface WifiTransferStatus {
+  running: boolean;
+  url?: string | null;
+  token?: string | null;
+  qrCodeDataUrl?: string | null;
+  port: number;
+}
+
+export interface TransferProgress {
+  id: string;
+  fileName: string;
+  transferred: number;
+  total: number;
+  percent: number;
+  speed: string;
+}

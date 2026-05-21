@@ -57,7 +57,11 @@ impl AppError {
     }
 
     pub fn mirror_already_running(serial: &str) -> Self {
-        Self::new("MIRROR_ALREADY_RUNNING", "A mirror session is already running on this device").with_detail(serial)
+        Self::new(
+            "MIRROR_ALREADY_RUNNING",
+            "A mirror session is already running on this device",
+        )
+        .with_detail(serial)
     }
 
     pub fn mirror_start_failed(reason: &str) -> Self {
@@ -81,9 +85,14 @@ impl AppError {
     }
 
     pub fn wireless_discovery_failed(reason: &str) -> Self {
-        Self::new("WIRELESS_DISCOVERY_FAILED", "Wireless device discovery failed")
-            .with_detail(reason)
-            .with_suggestion("Make sure ADB is available and wireless debugging is enabled in Android settings")
+        Self::new(
+            "WIRELESS_DISCOVERY_FAILED",
+            "Wireless device discovery failed",
+        )
+        .with_detail(reason)
+        .with_suggestion(
+            "Make sure ADB is available and wireless debugging is enabled in Android settings",
+        )
     }
 
     pub fn invalid_config(reason: &str) -> Self {
@@ -95,9 +104,12 @@ impl AppError {
     }
 
     pub fn capability_detection_failed(reason: &str) -> Self {
-        Self::new("CAPABILITY_DETECTION_FAILED", "Device capability detection failed")
-            .with_detail(reason)
-            .with_suggestion("Make sure the device is connected and scrcpy supports --list-encoders")
+        Self::new(
+            "CAPABILITY_DETECTION_FAILED",
+            "Device capability detection failed",
+        )
+        .with_detail(reason)
+        .with_suggestion("Make sure the device is connected and scrcpy supports --list-encoders")
     }
 
     pub fn internal_error(reason: &str) -> Self {

@@ -1,4 +1,4 @@
-import { FileText, LayoutGrid, Monitor, Settings, Smartphone } from "lucide-react";
+import { FileText, FolderSync, LayoutGrid, Monitor, Settings, Smartphone } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { Page } from "../../types";
 
@@ -6,6 +6,7 @@ const NAV_ITEMS: { id: Page; icon: typeof LayoutGrid; labelKey: string }[] = [
   { id: "dashboard", icon: LayoutGrid, labelKey: "sidebar:dashboard" },
   { id: "devices", icon: Smartphone, labelKey: "sidebar:devices" },
   { id: "mirror", icon: Monitor, labelKey: "sidebar:mirror" },
+  { id: "transfer", icon: FolderSync, labelKey: "sidebar:transfer" },
   { id: "logs", icon: FileText, labelKey: "sidebar:logs" },
   { id: "settings", icon: Settings, labelKey: "sidebar:settings" },
 ];

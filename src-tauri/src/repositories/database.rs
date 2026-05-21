@@ -10,8 +10,9 @@ pub struct Database {
 
 impl Database {
     pub fn open(data_dir: &Path) -> Result<Self, AppError> {
-        std::fs::create_dir_all(data_dir)
-            .map_err(|e| AppError::internal_error(&format!("Failed to create data directory: {e}")))?;
+        std::fs::create_dir_all(data_dir).map_err(|e| {
+            AppError::internal_error(&format!("Failed to create data directory: {e}"))
+        })?;
 
         let db_path = data_dir.join("devicedeck.db");
         let conn = Connection::open(&db_path)

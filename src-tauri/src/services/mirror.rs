@@ -98,8 +98,10 @@ impl MirrorService {
                 .await?
         };
 
-        self.log_bus
-            .adb_info(&wireless_device.serial, "Wireless ADB connected, starting mirror");
+        self.log_bus.adb_info(
+            &wireless_device.serial,
+            "Wireless ADB connected, starting mirror",
+        );
         self.start_mirror(&wireless_device.serial, config, session_repo)
             .await
     }

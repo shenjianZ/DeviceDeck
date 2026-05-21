@@ -24,3 +24,5 @@ dist-ssr
 *.sw?
 .gitnexus
 .env
+
+plan-*

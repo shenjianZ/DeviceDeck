@@ -1,5 +1,5 @@
 use super::types::{RawDevice, WirelessAdbService, WirelessAdbServiceType};
-use crate::core::types::VideoCodec;
+use crate::core::types::{FileEntry, VideoCodec};
 
 pub fn parse_adb_devices(output: &str) -> Vec<RawDevice> {
     let mut devices = Vec::new();
@@ -237,6 +237,199 @@ pub fn parse_screen_resolution(s: &str) -> Option<(u32, u32)> {
         return Some((w, h));
     }
     None
+}
+
+/// Parse `ls -la` or `ls -l` output from Android shell into FileEntry list.
+/// Supports multiple Android ls formats:
+///   drwxrwx--x  15 system system 4096 2025-01-15 10:30 dirname
+///   -rw-rw----   1 root   sdcard_rw 1234 2025-01-15 10:30 file.txt
+///   drwxrwx--x  15 system system 4096 2025-01-15-10:30 dirname
+///   -rw-rw----   1 root   root 1234 file.txt  (minimal format)
+pub fn parse_ls_la(output: &str, base_path: &str) -> Vec<FileEntry> {
+    let base = base_path.trim_end_matches('/');
+    let mut entries = Vec::new();
+
+    for line in output.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with("total") {
+            continue;
+        }
+
+        // Must start with a permission-like string (d/l/-/b/c followed by rwx etc.)
+        let first = match line.split_whitespace().next() {
+            Some(f) => f,
+            None => continue,
+        };
+        if first.len() < 2
+            || !first
+                .chars()
+                .next()
+                .map_or(false, |c| matches!(c, 'd' | '-' | 'l' | 'b' | 'c'))
+        {
+            continue;
+        }
+
+        if let Some(entry) = parse_ls_line(line, base) {
+            entries.push(entry);
+        }
+    }
+
+    entries.sort_by(|a, b| {
+        b.is_directory
+            .cmp(&a.is_directory)
+            .then(a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
+
+    entries
+}
+
+fn parse_ls_line(line: &str, base: &str) -> Option<FileEntry> {
+    let parts: Vec<&str> = line.split_whitespace().collect();
+    if parts.len() < 6 {
+        return None;
+    }
+
+    let permissions = parts[0];
+    let is_directory = permissions.starts_with('d');
+    let is_symlink = permissions.starts_with('l');
+
+    // Try standard format: perms links owner group size date... name
+    // Find name start by detecting the date/time boundary
+    if let Some(name_start) = find_name_start_standard(&parts) {
+        let name = parts[name_start..].join(" ");
+        let clean_name = if is_symlink {
+            name.split(" -> ").next().unwrap_or(&name).to_string()
+        } else {
+            name
+        };
+        if clean_name == "." || clean_name == ".." {
+            return None;
+        }
+        let size = parts.get(4).and_then(|s| s.parse::<u64>().ok());
+        let modified = if name_start > 5 {
+            Some(parts[5..name_start].join(" "))
+        } else {
+            None
+        };
+        let full_path = format!("{}/{}", base, clean_name);
+        return Some(FileEntry {
+            name: clean_name,
+            path: full_path,
+            is_directory,
+            size,
+            modified,
+            permissions: Some(permissions.to_string()),
+        });
+    }
+
+    // Fallback: minimal format: perms ? ? size name
+    // Try to find the file name by scanning backwards from the end
+    if let Some(size_idx) = find_size_index(&parts) {
+        if size_idx + 1 < parts.len() {
+            let name = parts[size_idx + 1..].join(" ");
+            let clean_name = if is_symlink {
+                name.split(" -> ").next().unwrap_or(&name).to_string()
+            } else {
+                name
+            };
+            if clean_name == "." || clean_name == ".." {
+                return None;
+            }
+            let size = parts[size_idx].parse::<u64>().ok();
+            let full_path = format!("{}/{}", base, clean_name);
+            return Some(FileEntry {
+                name: clean_name,
+                path: full_path,
+                is_directory,
+                size,
+                modified: None,
+                permissions: Some(permissions.to_string()),
+            });
+        }
+    }
+
+    None
+}
+
+/// Standard ls -l format detection: find where date ends and filename begins.
+/// Scans from index 5 onwards looking for date/time patterns.
+fn find_name_start_standard(parts: &[&str]) -> Option<usize> {
+    // parts layout: [0:perms] [1:links] [2:owner] [3:group] [4:size] [5+:date...] [N:name]
+    if parts.len() < 7 {
+        return None;
+    }
+
+    // Validate that parts[4] looks like a number (size field)
+    if parts[4].parse::<u64>().is_err() {
+        return None;
+    }
+
+    // Scan for date/time boundary starting from index 5
+    for i in 5..parts.len() {
+        // "HH:MM" time → next token is the name
+        if parts[i].contains(':') && !parts[i].starts_with('-') {
+            return Some(i + 1);
+        }
+        // "YYYY-MM-DD" date → check if next is time or name
+        if is_date_token(parts[i]) {
+            if i + 1 < parts.len() && parts[i + 1].contains(':') {
+                // Date followed by time → name is after time
+                return Some(i + 2);
+            }
+            // Date without time → name is next
+            return Some(i + 1);
+        }
+        // "YYYY-MM-DD-HH:MM" combined format
+        if parts[i].contains('-') && parts[i].contains(':') {
+            return Some(i + 1);
+        }
+    }
+
+    // If we can't find date patterns but have enough parts, try assuming 2 date tokens after size
+    if parts.len() >= 7 {
+        let candidate = 7;
+        if candidate < parts.len() {
+            return Some(candidate);
+        }
+    }
+
+    None
+}
+
+fn find_size_index(parts: &[&str]) -> Option<usize> {
+    // Search for a numeric field that could be the size
+    for i in 4..parts.len().saturating_sub(1) {
+        if parts[i].parse::<u64>().is_ok() {
+            return Some(i);
+        }
+    }
+    None
+}
+
+fn is_date_token(token: &str) -> bool {
+    // "2025-01-15" style
+    if token.chars().filter(|c| *c == '-').count() == 2 {
+        let parts: Vec<&str> = token.split('-').collect();
+        if parts.len() == 3 && parts.iter().all(|p| p.parse::<u32>().is_ok()) {
+            return true;
+        }
+    }
+    // "Jan".."Dec" month abbreviations
+    matches!(
+        token,
+        "Jan"
+            | "Feb"
+            | "Mar"
+            | "Apr"
+            | "May"
+            | "Jun"
+            | "Jul"
+            | "Aug"
+            | "Sep"
+            | "Oct"
+            | "Nov"
+            | "Dec"
+    )
 }
 
 #[cfg(test)]
