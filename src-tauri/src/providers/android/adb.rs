@@ -1,8 +1,9 @@
+use std::collections::HashSet;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{
     atomic::{AtomicU64, Ordering},
-    Arc,
+    Arc, LazyLock, Mutex,
 };
 use std::time::{Duration, Instant};
 
@@ -18,6 +19,32 @@ use crate::sidecar::shell_runner::ShellRunner;
 
 const DEFAULT_PUSH_DIRECTORY: &str = "/sdcard/Download/DeviceDeck";
 const TRANSFER_PROGRESS_INTERVAL: u64 = 262_144;
+const UPLOAD_STREAM_CHUNK_BYTES: u64 = 4 * 1024 * 1024;
+static CANCELLED_TRANSFERS: LazyLock<Mutex<HashSet<String>>> =
+    LazyLock::new(|| Mutex::new(HashSet::new()));
+
+pub fn request_transfer_cancel(id: &str) {
+    if let Ok(mut cancelled) = CANCELLED_TRANSFERS.lock() {
+        cancelled.insert(id.to_string());
+    }
+}
+
+fn is_transfer_cancelled(id: &str) -> bool {
+    CANCELLED_TRANSFERS
+        .lock()
+        .map(|cancelled| cancelled.contains(id))
+        .unwrap_or(false)
+}
+
+fn clear_transfer_cancel(id: &str) {
+    if let Ok(mut cancelled) = CANCELLED_TRANSFERS.lock() {
+        cancelled.remove(id);
+    }
+}
+
+fn transfer_cancelled_error() -> AppError {
+    AppError::new("TRANSFER_CANCELLED", "Transfer cancelled")
+}
 
 pub async fn execute_adb_devices(adb_path: &Path) -> Result<Vec<RawDevice>, AppError> {
     let output = ShellRunner::execute(adb_path, &["devices", "-l"]).await?;
@@ -785,6 +812,15 @@ impl<R> ProgressReader<R> {
 
 impl<R: Read> Read for ProgressReader<R> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        if let Some(progress) = &self.progress {
+            if is_transfer_cancelled(&progress.id) {
+                clear_transfer_cancel(&progress.id);
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Interrupted,
+                    "Transfer cancelled",
+                ));
+            }
+        }
         let n = self.inner.read(buf)?;
         if n > 0 {
             self.transferred_bytes
@@ -1205,76 +1241,66 @@ pub async fn execute_push_file_streaming(
 ) -> Result<DeviceActionResult, AppError> {
     validate_device_serial(serial)?;
     let local = PathBuf::from(local_path);
-    if !local.is_file() {
-        return Err(AppError::invalid_config("Please select a valid local file"));
+    if !local.exists() {
+        return Err(AppError::invalid_config("Please select a valid local path"));
     }
+    let remote_directory = normalize_remote_push_directory(remote_directory)?;
+
+    create_remote_directory(adb_path, serial, remote_directory).await?;
+
+    let remote = build_remote_push_target(&local, remote_directory)?;
+    if local.is_dir() {
+        create_remote_directory(adb_path, serial, &remote).await?;
+        let (file_count, byte_count) =
+            push_directory_recursive(adb_path, serial, &local, &remote, app_handle).await?;
+
+        let mut result = DeviceActionResult {
+            message: "Directory sent".into(),
+            output_path: Some(remote.clone()),
+            stdout: Some(format!(
+                "{} files, {} bytes transferred",
+                file_count, byte_count
+            )),
+            stderr: None,
+        };
+        result.stderr = merge_optional_output(
+            result.stderr,
+            refresh_android_file_index(adb_path, serial, &remote)
+                .await
+                .err(),
+        );
+        return Ok(result);
+    }
+
+    if !local.is_file() {
+        return Err(AppError::invalid_config(
+            "Please select a valid local file or directory",
+        ));
+    }
+
     let total_bytes = tokio::fs::metadata(&local)
         .await
         .map(|m| m.len())
         .unwrap_or(0);
-    let remote_directory = normalize_remote_push_directory(remote_directory)?;
+    let file_name = local_file_name(&local).unwrap_or("file").to_string();
 
-    // mkdir first (non-streaming, fast)
-    let mkdir_output = ShellRunner::execute_with_timeout(
-        adb_path,
-        &[
-            "-s",
-            serial,
-            "shell",
-            &format!("mkdir -p {}", remote_shell_quote(remote_directory)),
-        ],
-        std::time::Duration::from_secs(10),
-    )
-    .await?;
-    adb_action_result("Remote directory created", mkdir_output)?;
-
-    let remote = build_remote_push_target(&local, remote_directory)?;
-    let file_name = local
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("file")
-        .to_string();
-    let transfer_id = uuid::Uuid::new_v4().to_string();
-
-    let output = push_file_via_exec_in(
+    push_file_via_exec_in(
         adb_path,
         serial,
         &local,
         &remote,
-        &transfer_id,
+        &uuid::Uuid::new_v4().to_string(),
         &file_name,
         total_bytes,
         app_handle,
     )
     .await?;
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        return Err(AppError::internal_error(&format!(
-            "Push failed: {}",
-            stderr.trim()
-        )));
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    let combined = format!("{}\n{}", stdout, stderr);
-    if combined.to_lowercase().contains("adb: error:") {
-        return Err(AppError::internal_error(&format!(
-            "Push failed: {}",
-            combined.trim()
-        )));
-    }
-
     let mut result = DeviceActionResult {
         message: "File sent".into(),
         output_path: Some(remote.clone()),
-        stdout: Some(stdout.trim().to_string()),
-        stderr: if stderr.trim().is_empty() {
-            None
-        } else {
-            Some(stderr.trim().to_string())
-        },
+        stdout: Some(format!("{} bytes transferred", total_bytes)),
+        stderr: None,
     };
     result.stderr = merge_optional_output(
         result.stderr,
@@ -1352,6 +1378,11 @@ pub async fn execute_pull_file_streaming(
         let mut last_reported: u64 = 0;
 
         loop {
+            if is_transfer_cancelled(&transfer_id_clone) {
+                clear_transfer_cancel(&transfer_id_clone);
+                let _ = tokio::fs::remove_file(&local_file_clone).await;
+                return Err("Transfer cancelled".to_string());
+            }
             let n = match reader.read(&mut buf).await {
                 Ok(0) => break,
                 Ok(n) => n,
@@ -1399,7 +1430,15 @@ pub async fn execute_pull_file_streaming(
     let (write_result, status, stderr_output) = tokio::join!(write_task, child.wait(), stderr_task);
     let bytes_written = write_result
         .map_err(|e| AppError::internal_error(&e.to_string()))
-        .and_then(|r| r.map_err(|e| AppError::internal_error(&e)))?;
+        .and_then(|r| {
+            r.map_err(|e| {
+                if e == "Transfer cancelled" {
+                    transfer_cancelled_error()
+                } else {
+                    AppError::internal_error(&e)
+                }
+            })
+        })?;
     let stderr_output = stderr_output.unwrap_or_default();
 
     let exit_status =
@@ -1417,7 +1456,7 @@ pub async fn execute_pull_file_streaming(
         app_handle,
         "transfer://progress",
         TransferProgress {
-            id: transfer_id,
+            id: transfer_id.clone(),
             file_name,
             transferred: bytes_written,
             total: total_bytes.max(bytes_written),
@@ -1425,6 +1464,7 @@ pub async fn execute_pull_file_streaming(
             speed: format_speed(bytes_written, started_at.elapsed()),
         },
     );
+    clear_transfer_cancel(&transfer_id);
 
     sync_and_refresh(&local_file).await;
 
@@ -1445,45 +1485,43 @@ async fn push_file_via_exec_in(
     file_name: &str,
     total_bytes: u64,
     app_handle: &tauri::AppHandle,
-) -> Result<std::process::Output, AppError> {
+) -> Result<(), AppError> {
     let temp_remote = format!("{remote}.devicedeck-upload-{}", uuid::Uuid::new_v4());
-    let command = format!("cat > {}", remote_shell_quote(&temp_remote));
+    let remove_existing_output = ShellRunner::execute_with_timeout(
+        adb_path,
+        &[
+            "-s",
+            serial,
+            "shell",
+            &format!("rm -f {}", remote_shell_quote(remote)),
+        ],
+        std::time::Duration::from_secs(10),
+    )
+    .await?;
+    if !remove_existing_output.success {
+        return Err(AppError::internal_error(&format!(
+            "Failed to remove existing remote file: {}",
+            command_output_detail(&remove_existing_output)
+        )));
+    }
 
-    let mut child = process_command::new_tokio_command(adb_path)
-        .args(["-s", serial, "exec-in", "sh", "-c", &command])
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .map_err(|e| AppError::internal_error(&format!("Failed to spawn adb upload: {e}")))?;
-
-    let mut stdin = child
-        .stdin
-        .take()
-        .ok_or_else(|| AppError::internal_error("Failed to open adb upload stdin"))?;
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| AppError::internal_error("Failed to open adb upload stdout"))?;
-    let stderr = child
-        .stderr
-        .take()
-        .ok_or_else(|| AppError::internal_error("Failed to open adb upload stderr"))?;
-
-    let stdout_task = tokio::spawn(async move {
-        use tokio::io::AsyncReadExt;
-        let mut reader = tokio::io::BufReader::new(stdout);
-        let mut buf = Vec::new();
-        let _ = reader.read_to_end(&mut buf).await;
-        buf
-    });
-    let stderr_task = tokio::spawn(async move {
-        use tokio::io::AsyncReadExt;
-        let mut reader = tokio::io::BufReader::new(stderr);
-        let mut buf = Vec::new();
-        let _ = reader.read_to_end(&mut buf).await;
-        buf
-    });
+    let truncate_output = ShellRunner::execute_with_timeout(
+        adb_path,
+        &[
+            "-s",
+            serial,
+            "shell",
+            &format!(": > {}", remote_shell_quote(&temp_remote)),
+        ],
+        std::time::Duration::from_secs(10),
+    )
+    .await?;
+    if !truncate_output.success {
+        return Err(AppError::internal_error(&format!(
+            "Failed to create remote upload file: {}",
+            command_output_detail(&truncate_output)
+        )));
+    }
 
     let started_at = Instant::now();
     emit_transfer_progress(
@@ -1502,72 +1540,68 @@ async fn push_file_via_exec_in(
     let mut buf = vec![0u8; 64 * 1024];
     let mut transferred = 0u64;
     let mut last_reported = 0u64;
+    let mut last_speed_at = started_at;
+    let mut last_speed_bytes = 0u64;
+    let mut last_speed = String::new();
 
-    loop {
-        use tokio::io::AsyncReadExt;
-        let n = file
-            .read(&mut buf)
-            .await
-            .map_err(|e| AppError::internal_error(&format!("Failed to read local file: {e}")))?;
-        if n == 0 {
-            break;
+    while transferred < total_bytes {
+        if is_transfer_cancelled(transfer_id) {
+            clear_transfer_cancel(transfer_id);
+            let _ = ShellRunner::execute_with_timeout(
+                adb_path,
+                &[
+                    "-s",
+                    serial,
+                    "shell",
+                    &format!("rm -f {}", remote_shell_quote(&temp_remote)),
+                ],
+                std::time::Duration::from_secs(10),
+            )
+            .await;
+            return Err(transfer_cancelled_error());
         }
+        let command = format!("cat >> {}", remote_shell_quote(&temp_remote));
+        let mut child = process_command::new_tokio_command(adb_path)
+            .args(["-s", serial, "exec-in", "sh", "-c", &command])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .map_err(|e| AppError::internal_error(&format!("Failed to spawn adb upload: {e}")))?;
 
-        use tokio::io::AsyncWriteExt;
-        stdin.write_all(&buf[..n]).await.map_err(|e| {
-            AppError::internal_error(&format!("Failed to write upload stream: {e}"))
-        })?;
-        transferred = transferred.saturating_add(n as u64);
+        let mut stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| AppError::internal_error("Failed to open adb upload stdin"))?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| AppError::internal_error("Failed to open adb upload stdout"))?;
+        let stderr = child
+            .stderr
+            .take()
+            .ok_or_else(|| AppError::internal_error("Failed to open adb upload stderr"))?;
 
-        if transferred.saturating_sub(last_reported) >= TRANSFER_PROGRESS_INTERVAL
-            || transferred == total_bytes
-        {
-            last_reported = transferred;
-            emit_transfer_progress(
-                app_handle,
-                transfer_id,
-                file_name,
-                transferred,
-                total_bytes,
-                &started_at,
-                false,
-            );
-        }
-    }
+        let stdout_task = tokio::spawn(async move {
+            use tokio::io::AsyncReadExt;
+            let mut reader = tokio::io::BufReader::new(stdout);
+            let mut buf = Vec::new();
+            let _ = reader.read_to_end(&mut buf).await;
+            buf
+        });
+        let stderr_task = tokio::spawn(async move {
+            use tokio::io::AsyncReadExt;
+            let mut reader = tokio::io::BufReader::new(stderr);
+            let mut buf = Vec::new();
+            let _ = reader.read_to_end(&mut buf).await;
+            buf
+        });
 
-    use tokio::io::AsyncWriteExt;
-    stdin
-        .shutdown()
-        .await
-        .map_err(|e| AppError::internal_error(&format!("Failed to finish upload stream: {e}")))?;
-    drop(stdin);
-
-    let status = child
-        .wait()
-        .await
-        .map_err(|e| AppError::internal_error(&format!("Failed to wait for adb upload: {e}")))?;
-    let stdout = stdout_task.await.unwrap_or_default();
-    let stderr = stderr_task.await.unwrap_or_default();
-
-    let rename_ok = if status.success() {
-        let mv_output = ShellRunner::execute_with_timeout(
-            adb_path,
-            &[
-                "-s",
-                serial,
-                "shell",
-                &format!(
-                    "mv -f {} {}",
-                    remote_shell_quote(&temp_remote),
-                    remote_shell_quote(remote)
-                ),
-            ],
-            std::time::Duration::from_secs(15),
-        )
-        .await;
-        match mv_output {
-            Ok(o) if o.success => true,
-            _ => {
+        let mut chunk_written = 0u64;
+        while chunk_written < UPLOAD_STREAM_CHUNK_BYTES && transferred < total_bytes {
+            if is_transfer_cancelled(transfer_id) {
+                clear_transfer_cancel(transfer_id);
+                let _ = child.kill().await;
                 let _ = ShellRunner::execute_with_timeout(
                     adb_path,
                     &[
@@ -1579,10 +1613,94 @@ async fn push_file_via_exec_in(
                     std::time::Duration::from_secs(10),
                 )
                 .await;
-                false
+                return Err(transfer_cancelled_error());
+            }
+            use tokio::io::AsyncReadExt;
+            let remaining = (UPLOAD_STREAM_CHUNK_BYTES - chunk_written)
+                .min(total_bytes.saturating_sub(transferred));
+            let read_len = remaining.min(buf.len() as u64) as usize;
+            let n = file.read(&mut buf[..read_len]).await.map_err(|e| {
+                AppError::internal_error(&format!("Failed to read local file: {e}"))
+            })?;
+            if n == 0 {
+                break;
+            }
+
+            use tokio::io::AsyncWriteExt;
+            stdin.write_all(&buf[..n]).await.map_err(|e| {
+                AppError::internal_error(&format!("Failed to write upload stream: {e}"))
+            })?;
+            chunk_written = chunk_written.saturating_add(n as u64);
+            transferred = transferred.saturating_add(n as u64);
+
+            if transferred.saturating_sub(last_reported) >= TRANSFER_PROGRESS_INTERVAL
+                || transferred == total_bytes
+            {
+                let now = Instant::now();
+                last_speed = format_speed(
+                    transferred.saturating_sub(last_speed_bytes),
+                    now.duration_since(last_speed_at),
+                );
+                last_speed_at = now;
+                last_speed_bytes = transferred;
+                last_reported = transferred;
+                let _ = tauri::Emitter::emit(
+                    app_handle,
+                    "transfer://progress",
+                    TransferProgress {
+                        id: transfer_id.to_string(),
+                        file_name: file_name.to_string(),
+                        transferred,
+                        total: total_bytes,
+                        percent: progress_percent(transferred, total_bytes, false),
+                        speed: last_speed.clone(),
+                    },
+                );
             }
         }
-    } else {
+
+        use tokio::io::AsyncWriteExt;
+        stdin.shutdown().await.map_err(|e| {
+            AppError::internal_error(&format!("Failed to finish upload stream: {e}"))
+        })?;
+        drop(stdin);
+
+        let status = child.wait().await.map_err(|e| {
+            AppError::internal_error(&format!("Failed to wait for adb upload: {e}"))
+        })?;
+        let stdout = stdout_task.await.unwrap_or_default();
+        let stderr = stderr_task.await.unwrap_or_default();
+        if !status.success() {
+            let _ = ShellRunner::execute_with_timeout(
+                adb_path,
+                &[
+                    "-s",
+                    serial,
+                    "shell",
+                    &format!("rm -f {}", remote_shell_quote(&temp_remote)),
+                ],
+                std::time::Duration::from_secs(10),
+            )
+            .await;
+            let detail = format!(
+                "{}{}",
+                String::from_utf8_lossy(&stdout),
+                String::from_utf8_lossy(&stderr)
+            );
+            return Err(AppError::internal_error(&format!(
+                "Push failed: {}",
+                detail.trim()
+            )));
+        }
+
+        if chunk_written == 0 {
+            break;
+        }
+
+        tokio::task::yield_now().await;
+    }
+
+    if transferred != total_bytes {
         let _ = ShellRunner::execute_with_timeout(
             adb_path,
             &[
@@ -1594,26 +1712,154 @@ async fn push_file_via_exec_in(
             std::time::Duration::from_secs(10),
         )
         .await;
-        false
-    };
-
-    if rename_ok {
-        emit_transfer_progress(
-            app_handle,
-            transfer_id,
-            file_name,
-            total_bytes,
-            total_bytes,
-            &started_at,
-            true,
-        );
+        return Err(AppError::internal_error(&format!(
+            "Upload stream ended early: sent {} of {} bytes",
+            transferred, total_bytes
+        )));
     }
 
-    Ok(std::process::Output {
-        status,
-        stdout,
-        stderr,
-    })
+    let remote_temp_size = remote_file_size(adb_path, serial, &temp_remote).await?;
+    if remote_temp_size != total_bytes {
+        let _ = ShellRunner::execute_with_timeout(
+            adb_path,
+            &[
+                "-s",
+                serial,
+                "shell",
+                &format!("rm -f {}", remote_shell_quote(&temp_remote)),
+            ],
+            std::time::Duration::from_secs(10),
+        )
+        .await;
+        return Err(AppError::internal_error(&format!(
+            "Remote upload size mismatch: wrote {} of {} bytes",
+            remote_temp_size, total_bytes
+        )));
+    }
+
+    let mv_output = ShellRunner::execute_with_timeout(
+        adb_path,
+        &[
+            "-s",
+            serial,
+            "shell",
+            &format!(
+                "mv -f {} {}",
+                remote_shell_quote(&temp_remote),
+                remote_shell_quote(remote)
+            ),
+        ],
+        std::time::Duration::from_secs(15),
+    )
+    .await?;
+    if !mv_output.success {
+        let _ = ShellRunner::execute_with_timeout(
+            adb_path,
+            &[
+                "-s",
+                serial,
+                "shell",
+                &format!("rm -f {}", remote_shell_quote(&temp_remote)),
+            ],
+            std::time::Duration::from_secs(10),
+        )
+        .await;
+        return Err(AppError::internal_error(&format!(
+            "Failed to finalize upload: {}",
+            command_output_detail(&mv_output)
+        )));
+    }
+
+    let remote_final_size = remote_file_size(adb_path, serial, remote).await?;
+    if remote_final_size != total_bytes {
+        return Err(AppError::internal_error(&format!(
+            "Remote file size mismatch after upload: wrote {} of {} bytes",
+            remote_final_size, total_bytes
+        )));
+    }
+
+    let completion_speed = if last_speed.is_empty() && total_bytes > 0 {
+        format_speed(total_bytes, started_at.elapsed())
+    } else {
+        last_speed
+    };
+    let _ = tauri::Emitter::emit(
+        app_handle,
+        "transfer://progress",
+        TransferProgress {
+            id: transfer_id.to_string(),
+            file_name: file_name.to_string(),
+            transferred: total_bytes,
+            total: total_bytes,
+            percent: 100,
+            speed: completion_speed,
+        },
+    );
+    clear_transfer_cancel(transfer_id);
+
+    Ok(())
+}
+
+async fn push_directory_recursive(
+    adb_path: &Path,
+    serial: &str,
+    local_root: &Path,
+    remote_root: &str,
+    app_handle: &tauri::AppHandle,
+) -> Result<(u64, u64), AppError> {
+    let mut stack = vec![(local_root.to_path_buf(), remote_root.to_string())];
+    let mut file_count = 0u64;
+    let mut byte_count = 0u64;
+
+    while let Some((local_dir, remote_dir)) = stack.pop() {
+        let entries = std::fs::read_dir(&local_dir).map_err(|e| {
+            AppError::internal_error(&format!(
+                "Failed to read local directory {}: {e}",
+                local_dir.display()
+            ))
+        })?;
+
+        for entry in entries {
+            let entry = entry.map_err(|e| {
+                AppError::internal_error(&format!(
+                    "Failed to read local directory entry in {}: {e}",
+                    local_dir.display()
+                ))
+            })?;
+            let path = entry.path();
+            let name = local_file_name(&path)
+                .ok_or_else(|| AppError::invalid_config("Cannot read local file name"))?;
+            let remote_path = remote_child_path(&remote_dir, name);
+            let metadata = entry.metadata().map_err(|e| {
+                AppError::internal_error(&format!(
+                    "Failed to read local metadata {}: {e}",
+                    path.display()
+                ))
+            })?;
+
+            if metadata.is_dir() {
+                create_remote_directory(adb_path, serial, &remote_path).await?;
+                stack.push((path, remote_path));
+            } else if metadata.is_file() {
+                let total_bytes = metadata.len();
+                push_file_via_exec_in(
+                    adb_path,
+                    serial,
+                    &path,
+                    &remote_path,
+                    &uuid::Uuid::new_v4().to_string(),
+                    name,
+                    total_bytes,
+                    app_handle,
+                )
+                .await?;
+                file_count = file_count.saturating_add(1);
+                byte_count = byte_count.saturating_add(total_bytes);
+            }
+        }
+    }
+
+    Ok((file_count, byte_count))
 }
 
 /// Flush file to disk and notify OS shell to refresh the directory view.
@@ -1678,7 +1924,7 @@ fn build_remote_push_target(local: &Path, remote_directory: &str) -> Result<Stri
     let file_name = local_file_name(local)
         .ok_or_else(|| AppError::invalid_config("Cannot read local file name"))?;
     let remote_directory = normalize_remote_push_directory(remote_directory)?;
-    Ok(format!("{}/{}", remote_directory, file_name))
+    Ok(remote_child_path(remote_directory, file_name))
 }
 
 fn local_file_name(local: &Path) -> Option<&str> {
@@ -1687,6 +1933,30 @@ fn local_file_name(local: &Path) -> Option<&str> {
         .and_then(|value| value.to_str())
         .and_then(|value| value.rsplit(['/', '\\']).next())
         .filter(|value| !value.trim().is_empty())
+}
+
+fn remote_child_path(remote_directory: &str, child_name: &str) -> String {
+    format!("{}/{}", remote_directory.trim_end_matches('/'), child_name)
+}
+
+async fn create_remote_directory(
+    adb_path: &Path,
+    serial: &str,
+    remote_directory: &str,
+) -> Result<(), AppError> {
+    let output = ShellRunner::execute_with_timeout(
+        adb_path,
+        &[
+            "-s",
+            serial,
+            "shell",
+            &format!("mkdir -p {}", remote_shell_quote(remote_directory)),
+        ],
+        std::time::Duration::from_secs(10),
+    )
+    .await?;
+    adb_action_result("Remote directory created", output)?;
+    Ok(())
 }
 
 async fn refresh_android_file_index(

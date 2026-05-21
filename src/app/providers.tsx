@@ -4,7 +4,7 @@ import { useDeviceStore } from "../stores/deviceStore";
 import { useLogStore } from "../stores/logStore";
 import { useMirrorStore } from "../stores/mirrorStore";
 import { useSettingsStore } from "../stores/settingsStore";
-import { applyTheme } from "../lib/theme";
+import { applyTheme, getCachedTheme } from "../lib/theme";
 import { installContextMenuBlocker, installShortcutBlocker } from "../lib/keyboardShortcuts";
 import { AppShell } from "../components/layout/AppShell";
 import { WelcomeOverlay } from "../components/WelcomeOverlay";
@@ -21,7 +21,7 @@ export function AppProviders() {
   const settings = useSettingsStore((s) => s.settings);
   const refreshSessions = useMirrorStore((s) => s.refreshSessions);
 
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [theme, setTheme] = useState<"dark" | "light">(getCachedTheme());
   const [showWelcome, setShowWelcome] = useState(false);
   const [initialized, setInitialized] = useState(false);
 

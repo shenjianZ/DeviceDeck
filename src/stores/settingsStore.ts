@@ -81,6 +81,9 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     try {
       const settings = await tauriApi.getSettings();
       set({ settings, isLoading: false });
+      if (settings.theme) {
+        applyTheme(settings.theme as "dark" | "light");
+      }
       if (settings.fontSize) {
         applyFontSize(settings.fontSize);
       }

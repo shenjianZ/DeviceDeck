@@ -5,6 +5,7 @@ import i18n from "../i18n";
 import type { FileEntry, WifiTransferStatus, AppError, TransferProgress } from "../types";
 
 const DEFAULT_PATH = "/sdcard";
+const cancelledTransferIds = new Set<string>();
 
 export type SortField = "name" | "size" | "modified";
 export type SortDirection = "asc" | "desc";
@@ -45,6 +46,7 @@ interface TransferStore {
   refreshDirectory: (serial: string) => Promise<void>;
   createDirectory: (serial: string, folderName: string) => Promise<void>;
   createFile: (serial: string, fileName: string) => Promise<void>;
+  cancelTransfer: (id: string) => Promise<void>;
   setSort: (field: SortField) => void;
 
   startWifiTransfer: (port?: number) => Promise<void>;
@@ -142,7 +144,11 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
       );
     } catch (e: unknown) {
       const err = e as AppError;
-      useNotificationStore.getState().showError(i18n.t("transfer:pullFailed"), err.detail || err.message, err.suggestion);
+      if (err.code === "TRANSFER_CANCELLED") {
+        useNotificationStore.getState().showInfo(i18n.t("transfer:transferCancelled"));
+      } else {
+        useNotificationStore.getState().showError(i18n.t("transfer:pullFailed"), err.detail || err.message, err.suggestion);
+      }
     } finally {
       endTransferOperation(set, operationId);
     }
@@ -158,7 +164,11 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
       await get().listDirectory(serial, currentPath);
     } catch (e: unknown) {
       const err = e as AppError;
-      useNotificationStore.getState().showError(i18n.t("transfer:pushFailed"), err.detail || err.message, err.suggestion);
+      if (err.code === "TRANSFER_CANCELLED") {
+        useNotificationStore.getState().showInfo(i18n.t("transfer:transferCancelled"));
+      } else {
+        useNotificationStore.getState().showError(i18n.t("transfer:pushFailed"), err.detail || err.message, err.suggestion);
+      }
     } finally {
       endTransferOperation(set, operationId);
     }
@@ -206,6 +216,24 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
     } catch (e: unknown) {
       const err = e as AppError;
       useNotificationStore.getState().showError(i18n.t("transfer:fileCreateFailed"), err.detail || err.message, err.suggestion);
+    }
+  },
+
+  cancelTransfer: async (id) => {
+    try {
+      cancelledTransferIds.add(id);
+      await tauriApi.cancelTransfer(id);
+      set((state) => {
+        const next = new Map(state.activeTransfers);
+        next.delete(id);
+        return { activeTransfers: next };
+      });
+      window.setTimeout(() => cancelledTransferIds.delete(id), 30_000);
+      useNotificationStore.getState().showInfo(i18n.t("transfer:transferCancelling"));
+    } catch (e: unknown) {
+      cancelledTransferIds.delete(id);
+      const err = e as AppError;
+      useNotificationStore.getState().showError(i18n.t("transfer:cancelFailed"), err.detail || err.message, err.suggestion);
     }
   },
 
@@ -272,6 +300,8 @@ function endTransferOperation(set: TransferSet, operationId: string) {
 
 // Listen for transfer progress events
 tauriApi.onTransferProgress((progress) => {
+  if (cancelledTransferIds.has(progress.id)) return;
+
   useTransferStore.setState((state) => {
     const next = new Map(state.activeTransfers);
     if (progress.percent >= 100) {

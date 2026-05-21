@@ -13,15 +13,18 @@ import {
   FolderOpen,
   FolderPlus,
   FolderSync,
+  FolderUp,
   RefreshCw,
   Trash2,
   Upload,
   Wifi,
   WifiOff,
+  X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { open } from "@tauri-apps/plugin-dialog";
+import { Dropdown } from "../components/ui/Dropdown";
 import { useDeviceStore } from "../stores/deviceStore";
 import { useTransferStore } from "../stores/transferStore";
 import type { FileEntry, TransferProgress } from "../types";
@@ -52,13 +55,31 @@ type CreateMode = "file" | "folder";
 export function FileTransferPage() {
   const { t } = useTranslation(["transfer", "common"]);
   const [mode, setMode] = useState<TransferMode>("usb");
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const content = el.closest(".content") as HTMLElement | null;
+    if (!content) return;
+    const sync = () => {
+      const style = window.getComputedStyle(content);
+      const verticalPadding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+      el.style.height = `${content.clientHeight - verticalPadding}px`;
+    };
+    sync();
+    const ro = new ResizeObserver(sync);
+    ro.observe(content);
+    return () => ro.disconnect();
+  }, []);
 
   return (
     <div
+      ref={rootRef}
       data-dd-app-shortcuts="file-transfer"
-      style={{ display: "flex", flexDirection: "column", height: "100%" }}
+      style={{ display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden" }}
     >
-      <div className="action-bar" style={{ gap: 8, marginBottom: 16, flexShrink: 0 }}>
+      <div className="action-bar transfer-mode-bar" style={{ gap: 6, marginBottom: 10, flexShrink: 0 }}>
         <button
           className={`btn ${mode === "usb" ? "btn-p" : "btn-s"}`}
           onClick={() => setMode("usb")}
@@ -77,11 +98,11 @@ export function FileTransferPage() {
         </button>
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
-        <div style={{ display: mode === "usb" ? "contents" : "none" }}>
+      <div style={{ flex: 1, minHeight: 0, position: "relative", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div style={{ display: mode === "usb" ? "flex" : "none", flex: "1 1 0%", minHeight: 0, flexDirection: "column" }}>
           <UsbTransferPanel />
         </div>
-        <div style={{ display: mode === "wifi" ? "contents" : "none" }}>
+        <div style={{ display: mode === "wifi" ? "flex" : "none", flex: "1 1 0%", minHeight: 0, flexDirection: "column" }}>
           <WifiTransferPanel />
         </div>
       </div>
@@ -242,6 +263,7 @@ function UsbTransferPanel() {
   const createDirectory = useTransferStore((s) => s.createDirectory);
   const createFile = useTransferStore((s) => s.createFile);
   const activeTransfers = useTransferStore((s) => s.activeTransfers);
+  const cancelTransfer = useTransferStore((s) => s.cancelTransfer);
 
   const [selectedDeviceSerial, setSelectedDeviceSerial] = useState<string | null>(null);
   const [pathInput, setPathInput] = useState(currentPath);
@@ -253,6 +275,13 @@ function UsbTransferPanel() {
 
   const onlineDevices = useMemo(() => devices.filter((d) => d.status === "online"), [devices]);
   const selectedDevice = onlineDevices.find((d) => d.serial === selectedDeviceSerial) ?? null;
+  const deviceOptions = useMemo(
+    () => onlineDevices.map((d) => ({
+      value: d.serial,
+      label: d.name || d.model || d.serial,
+    })),
+    [onlineDevices],
+  );
 
   // Refs to avoid stale closures in keyboard/drag handlers
   const selectedFilesRef = useRef(selectedFiles);
@@ -279,6 +308,16 @@ function UsbTransferPanel() {
   const handlePush = useCallback(async () => {
     if (!selectedDevice) return;
     const localPath = await open({ multiple: true });
+    if (Array.isArray(localPath)) {
+      for (const p of localPath) await pushToDirectory(selectedDevice.serial, p);
+    } else if (typeof localPath === "string") {
+      await pushToDirectory(selectedDevice.serial, localPath);
+    }
+  }, [selectedDevice, pushToDirectory]);
+
+  const handlePushFolder = useCallback(async () => {
+    if (!selectedDevice) return;
+    const localPath = await open({ directory: true, multiple: true });
     if (Array.isArray(localPath)) {
       for (const p of localPath) await pushToDirectory(selectedDevice.serial, p);
     } else if (typeof localPath === "string") {
@@ -374,8 +413,6 @@ function UsbTransferPanel() {
 
   const closeCtx = useCallback(() => setCtx(null), []);
 
-  const breadcrumbs = currentPath.split("/").filter(Boolean);
-
   // Tauri drag-drop: HTML5 events are intercepted by Tauri, use native API instead
   useEffect(() => {
     if (!selectedDevice) return;
@@ -433,16 +470,17 @@ function UsbTransferPanel() {
         items.push({ label: t("delete"), icon: Trash2, danger: true, action: () => handleDeleteEntry(entry) });
       }
     } else {
-      items.push({ label: t("newFile"), icon: FilePlus2, action: () => openCreateInput("file") });
-      items.push({ label: t("newFolder"), icon: FolderPlus, action: () => openCreateInput("folder") });
-      items.push({ label: t("push"), icon: Upload, action: handlePush });
       items.push({ label: t("refresh"), icon: RefreshCw, action: () => selectedDevice && refreshDirectory(selectedDevice.serial) });
-      if (files.length > 0) {
-        items.push({ label: t("selectAll"), icon: File, action: selectAll });
-      }
+      items.push({ label: t("push"), icon: Upload, action: handlePush });
+      items.push({ label: t("pushFolder"), icon: FolderUp, action: handlePushFolder });
       if (selectedFiles.size > 0) {
         items.push({ label: t("pullSelected", { count: selectedFiles.size }), icon: Download, action: handlePullSelected });
         items.push({ label: t("deleteSelected", { count: selectedFiles.size }), icon: Trash2, danger: true, action: handleDeleteSelected });
+      }
+      items.push({ label: t("newFolder"), icon: FolderPlus, action: () => openCreateInput("folder") });
+      items.push({ label: t("newFile"), icon: FilePlus2, action: () => openCreateInput("file") });
+      if (files.length > 0) {
+        items.push({ label: t("selectAll"), icon: File, action: selectAll });
       }
     }
     return items;
@@ -453,6 +491,7 @@ function UsbTransferPanel() {
     files.length,
     selectedFiles,
     handlePush,
+    handlePushFolder,
     handlePullEntry,
     handleDeleteEntry,
     handlePullSelected,
@@ -478,73 +517,54 @@ function UsbTransferPanel() {
   return (
     <div
       data-dd-context-menu="file-transfer"
-      style={{ display: "flex", flexDirection: "column", height: "100%" }}
+      style={{ display: "flex", flexDirection: "column", flex: "1 1 0%", minHeight: 0, overflow: "hidden" }}
     >
       {/* Device selector */}
-      <div className="action-bar" style={{ marginBottom: 8, gap: 8, flexShrink: 0 }}>
-        <select
-          className="inp"
+      <div className="action-bar transfer-browser-toolbar" style={{ marginBottom: 6, gap: 6, flexShrink: 0 }}>
+        <Dropdown
+          className="transfer-device-select"
           value={selectedDeviceSerial ?? ""}
-          onChange={(e) => handleSelectDevice(e.target.value)}
-          style={{ minWidth: 200 }}
-        >
-          <option value="" disabled>{t("selectDevice")}</option>
-          {onlineDevices.map((d) => (
-            <option key={d.serial} value={d.serial}>
-              {d.name || d.model || d.serial}
-            </option>
-          ))}
-        </select>
-        <button className="btn btn-g" onClick={() => scanDevices()} disabled={isScanning} type="button">
-          <RefreshCw size={14} className={isScanning ? "spin" : ""} />
-        </button>
+          onChange={handleSelectDevice}
+          options={deviceOptions}
+          placeholder={t("selectDevice")}
+        />
         {selectedDevice && (
-          <div style={{ marginLeft: "auto" }}>
-            <button className="btn btn-s transfer-upload-btn" onClick={handlePush} type="button">
-              <Upload size={14} />
-              {t("push")}
+          <>
+            <button className="btn btn-g transfer-icon-btn" onClick={() => scanDevices()} disabled={isScanning} type="button" title={t("common:buttons.scan")}>
+              <RefreshCw size={14} className={isScanning ? "spin" : ""} />
             </button>
-          </div>
+            <button className="btn btn-g transfer-icon-btn" onClick={handlePush} type="button" title={t("push")}>
+              <Upload size={14} />
+            </button>
+            <button className="btn btn-g transfer-icon-btn" onClick={handlePushFolder} type="button" title={t("pushFolder")}>
+              <FolderUp size={14} />
+            </button>
+            <button className="btn btn-g transfer-icon-btn" onClick={handlePullSelected} disabled={selectedFiles.size === 0} type="button" title={t("pullSelected", { count: selectedFiles.size })}>
+              <Download size={14} />
+            </button>
+            <button className="btn btn-g transfer-icon-btn danger-toolbar-btn" onClick={handleDeleteSelected} disabled={selectedFiles.size === 0} type="button" title={t("deleteSelected", { count: selectedFiles.size })}>
+              <Trash2 size={14} />
+            </button>
+            <button className="btn btn-g transfer-icon-btn" onClick={openCreateInput.bind(null, "folder")} type="button" title={t("newFolder")}>
+              <FolderPlus size={14} />
+            </button>
+            <button className="btn btn-g transfer-icon-btn" onClick={openCreateInput.bind(null, "file")} type="button" title={t("newFile")}>
+              <FilePlus2 size={14} />
+            </button>
+            <button className="btn btn-g transfer-icon-btn" onClick={selectAll} disabled={files.length === 0} type="button" title={t("selectAll")}>
+              <File size={14} />
+            </button>
+          </>
         )}
       </div>
 
       {selectedDevice && (
-        <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-          {/* Breadcrumb */}
-          <div className="action-bar" style={{ marginBottom: 6, gap: 6, flexShrink: 0 }}>
-            <button className="btn btn-g" onClick={() => navigateUp(selectedDevice.serial)} type="button" title={t("goUp")}>
+        <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}>
+          {/* Path input */}
+          <div className="row transfer-pathbar" style={{ marginBottom: 6, gap: 6, flexShrink: 0 }}>
+            <button className="btn btn-g transfer-icon-btn" onClick={() => navigateUp(selectedDevice.serial)} type="button" title={t("goUp")}>
               <ArrowUp size={14} />
             </button>
-            <div style={{ display: "flex", gap: 2, flexWrap: "wrap", alignItems: "center", flex: 1, minWidth: 0 }}>
-              <button
-                className="btn btn-g"
-                style={{ padding: "2px 6px", fontSize: 11 }}
-                onClick={() => listDirectory(selectedDevice.serial, "/")}
-                type="button"
-              >
-                /
-              </button>
-              {breadcrumbs.map((part, idx) => {
-                const fullPath = "/" + breadcrumbs.slice(0, idx + 1).join("/");
-                return (
-                  <span key={fullPath} style={{ display: "flex", alignItems: "center", gap: 2 }}>
-                    <ChevronRight size={12} style={{ color: "var(--t3)" }} />
-                    <button
-                      className="btn btn-g"
-                      style={{ padding: "2px 6px", fontSize: 11 }}
-                      onClick={() => listDirectory(selectedDevice.serial, fullPath)}
-                      type="button"
-                    >
-                      {part}
-                    </button>
-                  </span>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Path input */}
-          <div className="row" style={{ marginBottom: 8, gap: 6, flexShrink: 0 }}>
             <input
               className="inp mono"
               value={pathInput}
@@ -552,17 +572,8 @@ function UsbTransferPanel() {
               onKeyDown={(e) => { if (e.key === "Enter") handlePathSubmit(selectedDevice.serial); }}
               style={{ flex: 1, fontSize: 12 }}
             />
-            <button className="btn btn-g" onClick={() => handlePathSubmit(selectedDevice.serial)} type="button">
+            <button className="btn btn-g transfer-icon-btn" onClick={() => handlePathSubmit(selectedDevice.serial)} type="button" title={t("open")}>
               <ChevronRight size={14} />
-            </button>
-            <button
-              className="btn btn-g"
-              onClick={() => refreshDirectory(selectedDevice.serial)}
-              disabled={isLoading}
-              type="button"
-              title={t("refresh")}
-            >
-              <RefreshCw size={14} className={isLoading ? "spin" : ""} />
             </button>
           </div>
 
@@ -598,7 +609,7 @@ function UsbTransferPanel() {
           {/* Scrollable file list */}
           <div
             className={isDragOver ? "drop-zone active" : "drop-zone"}
-            style={{ flex: 1, minHeight: 0, overflow: "auto" }}
+            style={{ flex: 1, minHeight: 0 }}
             onContextMenu={(e) => handleContextMenu(e)}
           >
             {isLoading ? (
@@ -612,39 +623,55 @@ function UsbTransferPanel() {
                 <span>{t("emptyDir")}</span>
               </div>
             ) : (
-              <div className="file-list">
+              <>
                 <div className="file-header">
                   <span style={{ width: 24 }} />
                   <SortHeader field="name" label={t("name")} current={sortField} direction={sortDirection} onSort={setSort} />
                   <SortHeader field="size" label={t("size")} current={sortField} direction={sortDirection} onSort={setSort} style={{ width: 80, textAlign: "right" }} />
                   <SortHeader field="modified" label={t("modified")} current={sortField} direction={sortDirection} onSort={setSort} style={{ width: 140, textAlign: "right" }} />
                 </div>
-                {sortedFiles.map((entry) => (
-                  <FileRow
-                    key={entry.path}
-                    entry={entry}
-                    selected={selectedFiles.has(entry.path)}
-                    onSelect={() => selectSingle(entry.path)}
-                    onMultiSelect={() => toggleFileSelection(entry.path)}
-                    onNavigate={() => handleNavigate(selectedDevice.serial, entry)}
-                    onContextMenu={(e) => handleContextMenu(e, entry)}
-                  />
-                ))}
-              </div>
+                <div className="file-list">
+                  {sortedFiles.map((entry) => (
+                    <FileRow
+                      key={entry.path}
+                      entry={entry}
+                      selected={selectedFiles.has(entry.path)}
+                      onSelect={() => {
+                        if (selectedFiles.size === 1 && selectedFiles.has(entry.path)) {
+                          clearSelection();
+                        } else {
+                          selectSingle(entry.path);
+                        }
+                      }}
+                      onMultiSelect={() => toggleFileSelection(entry.path)}
+                      onNavigate={() => handleNavigate(selectedDevice.serial, entry)}
+                      onContextMenu={(e) => handleContextMenu(e, entry)}
+                    />
+                  ))}
+                </div>
+              </>
             )}
           </div>
 
           {/* Transfer progress bars */}
           {activeTransfers.size > 0 && (
-            <div style={{ marginTop: 8, flexShrink: 0 }}>
-              {[...activeTransfers.values()].map((t) => (
-                <div key={t.id} className="transfer-progress">
+            <div style={{ marginTop: 8, flexShrink: 0, maxHeight: 160, overflowY: "auto" }}>
+              {[...activeTransfers.values()].map((transfer) => (
+                <div key={transfer.id} className="transfer-progress">
                   <div className="transfer-info">
-                    <span className="transfer-name">{t.fileName}</span>
-                    <span className="transfer-percent">{formatTransferProgress(t)}</span>
+                    <span className="transfer-name">{transfer.fileName}</span>
+                    <span className="transfer-percent">{formatTransferProgress(transfer)}</span>
+                    <button
+                      className="transfer-cancel-btn"
+                      type="button"
+                      title={t("common:buttons.cancel")}
+                      onClick={() => cancelTransfer(transfer.id)}
+                    >
+                      <X size={12} />
+                    </button>
                   </div>
-                  <div className={`progress-bar${t.total > 0 ? "" : " indeterminate"}`}>
-                    <div className="progress-fill" style={{ width: t.total > 0 ? `${t.percent}%` : "38%" }} />
+                  <div className={`progress-bar${transfer.total > 0 ? "" : " indeterminate"}`}>
+                    <div className="progress-fill" style={{ width: transfer.total > 0 ? `${transfer.percent}%` : "38%" }} />
                   </div>
                 </div>
               ))}
@@ -666,11 +693,46 @@ function UsbTransferPanel() {
       )}
 
       <style>{`
-        .file-list { border: 1px solid var(--bd); border-radius: 6px; overflow: hidden; }
+        .transfer-mode-bar .btn,
+        .transfer-browser-toolbar .btn,
+        .transfer-pathbar .btn {
+          min-height: 32px;
+          padding: 4px 10px;
+        }
+        .transfer-browser-toolbar {
+          flex-wrap: nowrap;
+          overflow: hidden;
+        }
+        .transfer-device-select {
+          width: 120px;
+          flex: 0 0 120px;
+          min-width: 0;
+        }
+        .transfer-browser-toolbar .inp,
+        .transfer-pathbar .inp {
+          min-height: 32px;
+          padding-top: 4px;
+          padding-bottom: 4px;
+        }
+        .transfer-icon-btn {
+          width: 34px;
+          padding-left: 0 !important;
+          padding-right: 0 !important;
+          justify-content: center;
+        }
+        .danger-toolbar-btn:not(:disabled) {
+          color: var(--wrn);
+        }
+        .file-list {
+          flex: 1;
+          min-height: 0;
+          overflow-y: auto;
+        }
         .file-header {
           display: flex; align-items: center; gap: 8px; padding: 6px 10px;
           background: var(--bg2); font-size: 11px; color: var(--t2); font-weight: 600;
           text-transform: uppercase; letter-spacing: 0.04em;
+          flex-shrink: 0; border-bottom: 1px solid var(--bd);
         }
         .sort-header {
           display: inline-flex; align-items: center; gap: 4px;
@@ -680,12 +742,6 @@ function UsbTransferPanel() {
           transition: color 0.15s;
         }
         .sort-header:hover { color: var(--acc); }
-        .transfer-upload-btn {
-          min-width: 76px;
-          justify-content: center;
-          white-space: nowrap;
-        }
-        .transfer-upload-btn svg { flex-shrink: 0; }
         .file-row {
           display: flex; align-items: center; gap: 8px; padding: 6px 10px;
           border-top: 1px solid var(--bd); cursor: pointer; font-size: 13px;
@@ -737,12 +793,25 @@ function UsbTransferPanel() {
         .confirm-dialog-warning { color: var(--wrn); font-size: 12px; margin-bottom: 16px; }
         .confirm-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
         .danger-btn { background: var(--wrn); border-color: var(--wrn); color: var(--bg-0); }
-        .drop-zone { position: relative; }
+        .drop-zone {
+          position: relative; border: 1px solid var(--bd); border-radius: 6px;
+          background: var(--bg-0); overflow: hidden; display: flex; flex-direction: column;
+        }
         .drop-zone.active { outline: 2px dashed var(--acc); outline-offset: -2px; background: color-mix(in srgb, var(--acc) 8%, transparent); }
         .transfer-progress { padding: 8px 12px; background: var(--bg2); border-radius: 6px; margin-bottom: 4px; }
-        .transfer-info { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-        .transfer-name { font-size: 12px; color: var(--t1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 50%; }
-        .transfer-percent { font-size: 12px; color: var(--acc); font-weight: 600; white-space: nowrap; }
+        .transfer-info { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+        .transfer-name { flex: 1; min-width: 0; font-size: 12px; color: var(--t1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .transfer-percent { flex-shrink: 0; font-size: 12px; color: var(--acc); font-weight: 600; white-space: nowrap; }
+        .transfer-cancel-btn {
+          width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center;
+          flex-shrink: 0; padding: 0; border: 1px solid var(--bd); border-radius: 6px;
+          background: var(--bg-0); color: var(--t2); cursor: pointer;
+        }
+        .transfer-cancel-btn:hover {
+          color: var(--wrn);
+          border-color: color-mix(in srgb, var(--wrn) 50%, var(--bd));
+          background: color-mix(in srgb, var(--wrn) 10%, transparent);
+        }
         .progress-bar { height: 4px; background: var(--bd); border-radius: 2px; overflow: hidden; }
         .progress-fill { height: 100%; background: var(--acc); border-radius: 2px; transition: width 0.3s ease; }
         .progress-bar.indeterminate .progress-fill { animation: progress-slide 1.2s ease-in-out infinite; }

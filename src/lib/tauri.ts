@@ -71,6 +71,8 @@ export const tauriApi = {
     invoke<DeviceActionResult>("push_device_file_streaming", { serial, localPath, remoteDirectory }),
   pullDeviceFileStreaming: (serial: string, remotePath: string, localDirectory: string) =>
     invoke<DeviceActionResult>("pull_device_file_streaming", { serial, remotePath, localDirectory }),
+  cancelTransfer: (id: string) =>
+    invoke<void>("cancel_transfer", { id }),
   startWifiTransfer: (port?: number) =>
     invoke<WifiTransferStatus>("start_wifi_transfer", { port }),
   stopWifiTransfer: () =>

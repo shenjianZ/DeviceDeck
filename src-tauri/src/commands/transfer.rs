@@ -89,6 +89,12 @@ pub async fn pull_device_file_streaming(
 }
 
 #[tauri::command]
+pub async fn cancel_transfer(id: String) -> Result<(), AppError> {
+    crate::providers::android::adb::request_transfer_cancel(&id);
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn start_wifi_transfer(
     transfer_service: tauri::State<'_, TransferService>,
     port: Option<u16>,

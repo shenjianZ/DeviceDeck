@@ -145,6 +145,7 @@ pub fn run() {
             commands::transfer::create_device_file,
             commands::transfer::push_device_file_streaming,
             commands::transfer::pull_device_file_streaming,
+            commands::transfer::cancel_transfer,
             commands::transfer::start_wifi_transfer,
             commands::transfer::stop_wifi_transfer,
             commands::transfer::get_wifi_transfer_status,
