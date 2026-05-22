@@ -2,6 +2,20 @@
 
 本文件记录 DeviceDeck 的版本更新历史。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [0.1.2] - 2026-05-22
+
+### Added
+
+- 项目官方网站（site/），基于 React 19 + TypeScript + Vite 构建，包含首页、功能介绍、截图、下载、架构、FAQ 等完整模块
+- WiFi 文件传输独立 Web 页面（devicedeck-wifi-transfer.html），支持验证码认证、文件上传/下载，适配移动端浏览器
+- GitHub Actions 自动部署工作流（site.yml），site/ 目录变更时自动构建并部署到 GitHub Pages
+- 扩展 `bump-version.mjs`，版本发布时同步更新 site 中的版本号（translations.ts、Download.tsx、Hero.tsx）
+
+### Changed
+
+- 优化所有平台图标文件（icon.ico/icns/png 及 Windows Square 系列），显著减小文件体积
+- 更新 GitNexus 索引数据（2069 symbols, 3954 relationships, 171 execution flows）
+
 ## [0.1.1] - 2026-05-18
 
 ### Added

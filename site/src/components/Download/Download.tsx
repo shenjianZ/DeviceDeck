@@ -15,8 +15,8 @@ const platforms = [
     id: 'dl-win',
     name: 'Windows',
     subtitle: 'x64 · Windows 10+',
-    href: 'https://github.com/shenjianZ/DeviceDeck/releases/download/v0.1.1/DeviceDeck-v0.1.1-windows-x64.exe',
-    releasesHref: 'https://github.com/shenjianZ/DeviceDeck/releases/tag/v0.1.1',
+    href: 'https://github.com/shenjianZ/DeviceDeck/releases/download/v0.1.2/DeviceDeck-v0.1.2-windows-x64.exe',
+    releasesHref: 'https://github.com/shenjianZ/DeviceDeck/releases/tag/v0.1.2',
     osKey: 'win',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -29,8 +29,8 @@ const platforms = [
     id: 'dl-mac',
     name: 'macOS',
     subtitle: 'Apple Silicon & Intel · macOS 11+',
-    href: 'https://github.com/shenjianZ/DeviceDeck/releases/download/v0.1.1/DeviceDeck-v0.1.1-macos-aarch64.dmg',
-    releasesHref: 'https://github.com/shenjianZ/DeviceDeck/releases/tag/v0.1.1',
+    href: 'https://github.com/shenjianZ/DeviceDeck/releases/download/v0.1.2/DeviceDeck-v0.1.2-macos-aarch64.dmg',
+    releasesHref: 'https://github.com/shenjianZ/DeviceDeck/releases/tag/v0.1.2',
     osKey: 'mac',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -43,8 +43,8 @@ const platforms = [
     id: 'dl-linux',
     name: 'Linux',
     subtitle: 'x64 · Ubuntu 20.04+',
-    href: 'https://github.com/shenjianZ/DeviceDeck/releases/download/v0.1.1/DeviceDeck-v0.1.1-linux-x64.AppImage',
-    releasesHref: 'https://github.com/shenjianZ/DeviceDeck/releases/tag/v0.1.1',
+    href: 'https://github.com/shenjianZ/DeviceDeck/releases/download/v0.1.2/DeviceDeck-v0.1.2-linux-x64.AppImage',
+    releasesHref: 'https://github.com/shenjianZ/DeviceDeck/releases/tag/v0.1.2',
     osKey: 'linux',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
