@@ -1,0 +1,25 @@
+/* Screenshots Carousel */
+.carousel-container{max-width:780px;margin:0 auto}
+.carousel-viewport{overflow:hidden;border-radius:var(--radius-lg);border:1px solid var(--border);box-shadow:var(--shadow-lg);background:var(--surface)}
+.carousel-track{display:flex;transition:transform .55s cubic-bezier(.4,0,.2,1)}
+.carousel-slide{min-width:100%;padding:20px}
+.slide-content{border-radius:var(--radius-md);overflow:hidden;border:1px solid var(--border)}
+.slide-titlebar{height:34px;background:var(--surface-alt);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:8px}
+.slide-dot{width:9px;height:9px;border-radius:50%}
+.slide-dot.r{background:#ef4444}.slide-dot.y{background:#eab308}.slide-dot.g{background:#38bdf8}
+.slide-tab{margin-left:12px;font-size:.7rem;color:var(--accent);font-family:var(--font-mono);background:var(--accent-bg);padding:2px 10px;border-radius:var(--radius-sm)}
+.slide-screenshot{background:var(--bg);display:flex;justify-content:center;overflow:hidden;max-height:360px}
+.slide-screenshot img{width:100%;height:auto;display:block;object-fit:contain;max-height:360px}
+.slide-caption{text-align:center;padding:12px 16px;font-size:.82rem;color:var(--fg-sec);background:var(--surface-alt);border-top:1px solid var(--border)}
+.slide-controls{display:flex;justify-content:center;align-items:center;gap:16px;margin-top:20px}
+.slide-dots{display:flex;gap:8px}
+.slide-dot-btn{width:10px;height:10px;border-radius:50%;border:1.5px solid var(--fg-muted);background:transparent;transition:all var(--transition-base)}
+.slide-dot-btn.active{background:var(--accent);border-color:var(--accent);transform:scale(1.2)}
+.slide-dot-btn:hover:not(.active){border-color:var(--accent)}
+.slide-arrows button{width:36px;height:36px;border-radius:50%;border:1px solid var(--border);display:grid;place-items:center;color:var(--fg-sec);transition:all var(--transition-base)}
+.slide-arrows button:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-bg)}
+.slide-arrows button svg{width:16px;height:16px}
+
+@media(max-width:768px){
+  .slide-screenshot img{max-height:240px}
+}

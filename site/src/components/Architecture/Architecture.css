@@ -1,0 +1,19 @@
+/* Architecture */
+.arch-wrapper{max-width:680px;margin:0 auto}
+.arch-stack{display:flex;flex-direction:column;gap:0}
+.arch-layer{padding:20px 28px;border-radius:var(--radius-lg);border:1px solid var(--border);background:var(--surface);text-align:center;position:relative;transition:all .35s cubic-bezier(.4,0,.2,1)}
+.arch-layer:hover{border-color:var(--border-h);transform:translateY(-2px);box-shadow:var(--shadow)}
+.arch-layer .layer-title{font-size:1.05rem;font-weight:700;margin-bottom:4px}
+.arch-layer .layer-desc{font-size:.82rem;color:var(--fg-sec);margin-bottom:10px}
+.arch-badges{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.arch-badge{padding:4px 12px;border-radius:999px;font-size:.72rem;font-weight:600;font-family:var(--font-mono);background:var(--accent-bg);color:var(--accent);
+  border:1px solid oklch(from var(--accent) l c h / 15%);transition:all var(--transition-base)}
+.arch-badge:hover{transform:scale(1.05);background:oklch(from var(--accent) l c h / 20%)}
+.arch-connector{height:28px;display:flex;align-items:center;justify-content:center;position:relative}
+.arch-connector svg{width:28px;height:28px}
+.arch-connector .line{stroke:var(--accent);stroke-width:2;stroke-dasharray:6 4;fill:none;opacity:.5;animation:arrowFlow 1.5s linear infinite}
+.arch-connector .arrow{fill:var(--accent);opacity:.6}
+
+@media(max-width:768px){
+  .arch-layer{padding:16px 20px}
+}

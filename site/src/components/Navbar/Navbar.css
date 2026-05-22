@@ -1,0 +1,29 @@
+/* Navbar */
+.nav{position:fixed;top:0;left:0;right:0;height:var(--nav-h);z-index:1000;
+  background:var(--glass);backdrop-filter:var(--glass-b);-webkit-backdrop-filter:var(--glass-b);
+  border-bottom:1px solid var(--border);transition:all var(--transition-slow)}
+.nav-inner{display:flex;align-items:center;justify-content:space-between;height:100%;max-width:var(--max-w);margin:0 auto;padding:0 24px}
+.nav-logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:1.15rem}
+.nav-logo-icon{width:32px;height:32px;border-radius:var(--radius-sm);object-fit:contain}
+.nav-links{display:flex;gap:6px}
+.nav-links a{padding:6px 12px;border-radius:var(--radius-sm);font-size:.85rem;font-weight:500;color:var(--fg-sec);transition:all var(--transition-base);position:relative}
+.nav-links a:hover{color:var(--fg);background:var(--accent-bg)}
+.nav-right{display:flex;align-items:center;gap:8px}
+.theme-btn,.lang-btn,.gh-btn{width:36px;height:36px;border-radius:var(--radius-sm);display:grid;place-items:center;color:var(--fg-sec);border:1px solid var(--border);transition:all var(--transition-base)}
+.theme-btn:hover,.lang-btn:hover,.gh-btn:hover{border-color:var(--border-h);color:var(--fg);background:var(--accent-bg)}
+.theme-btn svg,.gh-btn svg{width:18px;height:18px}
+.lang-btn{font-size:.75rem;font-weight:600;font-family:var(--font-mono);min-width:36px}
+.hamburger{display:none;flex-direction:column;gap:5px;padding:4px;cursor:pointer}
+.hamburger span{width:22px;height:2px;background:var(--fg);border-radius:2px;transition:all .3s}
+.hamburger.open span:nth-child(1){transform:rotate(45deg) translate(5px,5px)}
+.hamburger.open span:nth-child(2){opacity:0}
+.hamburger.open span:nth-child(3){transform:rotate(-45deg) translate(5px,-5px)}
+.mobile-menu{display:none;position:fixed;top:var(--nav-h);left:0;right:0;background:var(--surface);border-bottom:1px solid var(--border);z-index:999;animation:fadeDown .3s ease}
+.mobile-menu.open{display:block}
+.mobile-menu a{display:block;padding:14px 24px;font-size:.95rem;font-weight:500;color:var(--fg-sec);border-bottom:1px solid var(--border);transition:all var(--transition-base)}
+.mobile-menu a:hover{background:var(--accent-bg);color:var(--accent)}
+
+@media(max-width:768px){
+  .nav-links{display:none}
+  .hamburger{display:flex}
+}

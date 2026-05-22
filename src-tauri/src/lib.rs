@@ -149,6 +149,10 @@ pub fn run() {
             commands::transfer::start_wifi_transfer,
             commands::transfer::stop_wifi_transfer,
             commands::transfer::get_wifi_transfer_status,
+            commands::transfer::list_wifi_received_files,
+            commands::transfer::delete_wifi_received_file,
+            commands::transfer::clear_wifi_received_files,
+            commands::transfer::open_wifi_upload_dir,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

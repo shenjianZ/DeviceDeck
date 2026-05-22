@@ -29,7 +29,7 @@ interface TransferStore {
 
   // Wi-Fi mode
   wifiStatus: WifiTransferStatus | null;
-  receivedFiles: string[];
+  receivedFiles: FileEntry[];
   isWifiBusy: boolean;
 
   // Actions
@@ -52,6 +52,10 @@ interface TransferStore {
   startWifiTransfer: (port?: number) => Promise<void>;
   stopWifiTransfer: () => Promise<void>;
   loadWifiStatus: () => Promise<void>;
+  loadReceivedFiles: () => Promise<void>;
+  deleteReceivedFile: (name: string) => Promise<void>;
+  clearReceivedFiles: () => Promise<void>;
+  openUploadDir: () => Promise<void>;
 }
 
 export const useTransferStore = create<TransferStore>((set, get) => ({
@@ -242,6 +246,7 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
     try {
       const status = await tauriApi.startWifiTransfer(port);
       set({ wifiStatus: status, isWifiBusy: false });
+      get().loadReceivedFiles();
       useNotificationStore.getState().showSuccess(i18n.t("transfer:wifiStarted"), status.url || "");
     } catch (e: unknown) {
       const err = e as AppError;
@@ -256,6 +261,7 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
       await tauriApi.stopWifiTransfer();
       set({
         wifiStatus: { running: false, port: 0 },
+        receivedFiles: [],
         isWifiBusy: false,
       });
       useNotificationStore.getState().showSuccess(i18n.t("transfer:wifiStopped"));
@@ -270,8 +276,49 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
     try {
       const status = await tauriApi.getWifiTransferStatus();
       set({ wifiStatus: status });
+      if (status.running) get().loadReceivedFiles();
     } catch {
       // ignore
+    }
+  },
+
+  loadReceivedFiles: async () => {
+    try {
+      const files = await tauriApi.listWifiReceivedFiles();
+      set({ receivedFiles: files });
+    } catch {
+      // ignore
+    }
+  },
+
+  deleteReceivedFile: async (name) => {
+    try {
+      await tauriApi.deleteWifiReceivedFile(name);
+      await get().loadReceivedFiles();
+      useNotificationStore.getState().showSuccess(i18n.t("transfer:deleteSuccess"), name);
+    } catch (e: unknown) {
+      const err = e as AppError;
+      useNotificationStore.getState().showError(i18n.t("transfer:deleteFailed"), err.detail || err.message, err.suggestion);
+    }
+  },
+
+  clearReceivedFiles: async () => {
+    try {
+      await tauriApi.clearWifiReceivedFiles();
+      set({ receivedFiles: [] });
+      useNotificationStore.getState().showSuccess(i18n.t("transfer:clearSuccess"));
+    } catch (e: unknown) {
+      const err = e as AppError;
+      useNotificationStore.getState().showError(i18n.t("transfer:clearFailed"), err.detail || err.message, err.suggestion);
+    }
+  },
+
+  openUploadDir: async () => {
+    try {
+      await tauriApi.openWifiUploadDir();
+    } catch (e: unknown) {
+      const err = e as AppError;
+      useNotificationStore.getState().showError(i18n.t("transfer:openDirFailed"), err.detail || err.message, err.suggestion);
     }
   },
 }));
@@ -321,6 +368,10 @@ tauriApi.onTransferProgress((progress) => {
     }
     return { activeTransfers: next };
   });
+});
+
+tauriApi.onFileReceived(() => {
+  void useTransferStore.getState().loadReceivedFiles();
 });
 
 function sortFiles(files: FileEntry[], field: SortField, direction: SortDirection): FileEntry[] {

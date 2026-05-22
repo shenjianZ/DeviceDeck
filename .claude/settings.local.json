@@ -9,7 +9,9 @@
       "Bash(rtk tsc *)",
       "mcp__gitnexus__detect_changes",
       "Bash(pnpm build *)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(pnpm dev *)",
+      "Bash(rtk read *)"
     ]
   }
 }

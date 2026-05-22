@@ -910,13 +910,27 @@ function WifiTransferPanel() {
   const { t } = useTranslation("transfer");
   const wifiStatus = useTransferStore((s) => s.wifiStatus);
   const isWifiBusy = useTransferStore((s) => s.isWifiBusy);
+  const receivedFiles = useTransferStore((s) => s.receivedFiles);
   const startWifiTransfer = useTransferStore((s) => s.startWifiTransfer);
   const stopWifiTransfer = useTransferStore((s) => s.stopWifiTransfer);
   const loadWifiStatus = useTransferStore((s) => s.loadWifiStatus);
-
-  useEffect(() => { loadWifiStatus(); }, [loadWifiStatus]);
+  const loadReceivedFiles = useTransferStore((s) => s.loadReceivedFiles);
+  const deleteReceivedFile = useTransferStore((s) => s.deleteReceivedFile);
+  const clearReceivedFiles = useTransferStore((s) => s.clearReceivedFiles);
+  const openUploadDir = useTransferStore((s) => s.openUploadDir);
 
   const isRunning = wifiStatus?.running ?? false;
+
+  useEffect(() => { void loadWifiStatus(); }, [loadWifiStatus]);
+
+  useEffect(() => {
+    if (!isRunning) return;
+    void loadReceivedFiles();
+    const refreshTimer = window.setInterval(() => {
+      void loadReceivedFiles();
+    }, 3000);
+    return () => window.clearInterval(refreshTimer);
+  }, [isRunning, loadReceivedFiles]);
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -1001,6 +1015,49 @@ function WifiTransferPanel() {
           {isRunning ? t("wifiStop") : t("wifiStart")}
         </button>
       </div>
+
+      {isRunning && (
+        <div className="card" style={{ marginTop: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+            <span style={{ fontWeight: 600, fontSize: 14 }}>
+              {t("receivedFiles")} ({receivedFiles.length})
+            </span>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button className="btn btn-g" style={{ padding: "4px 8px", fontSize: 12 }} onClick={() => openUploadDir()} type="button">
+                <FolderOpen size={13} />
+                {t("openDir")}
+              </button>
+              {receivedFiles.length > 0 && (
+                <button className="btn btn-d" style={{ padding: "4px 8px", fontSize: 12 }} onClick={() => clearReceivedFiles()} type="button">
+                  <Trash2 size={13} />
+                  {t("clearAll")}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {receivedFiles.length === 0 ? (
+            <div style={{ color: "var(--t2)", fontSize: 13, textAlign: "center", padding: "16px 0" }}>
+              {t("noFiles")}
+            </div>
+          ) : (
+            <div style={{ maxHeight: 320, overflowY: "auto" }}>
+              {receivedFiles.map((f) => (
+                <div key={f.path} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid var(--bd)" }}>
+                  {f.isDirectory ? <Folder size={16} style={{ color: "var(--t2)", flexShrink: 0 }} /> : <File size={16} style={{ color: "var(--t2)", flexShrink: 0 }} />}
+                  <span style={{ flex: 1, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</span>
+                  <span style={{ fontSize: 11, color: "var(--t2)", flexShrink: 0, fontFamily: "monospace" }}>
+                    {f.isDirectory ? t("folder") : formatSize(f.size ?? 0, t)}
+                  </span>
+                  <button className="btn btn-g" style={{ padding: 2, flexShrink: 0 }} onClick={() => deleteReceivedFile(f.name)} type="button" title={t("delete")}>
+                    <X size={13} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

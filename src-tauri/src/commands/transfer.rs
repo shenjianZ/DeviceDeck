@@ -1,5 +1,6 @@
 use crate::core::error::AppError;
 use crate::core::types::{DeviceActionResult, FileEntry, WifiTransferStatus};
+use crate::services::settings::SettingsService;
 use crate::services::transfer::TransferService;
 
 #[tauri::command]
@@ -97,9 +98,24 @@ pub async fn cancel_transfer(id: String) -> Result<(), AppError> {
 #[tauri::command]
 pub async fn start_wifi_transfer(
     transfer_service: tauri::State<'_, TransferService>,
+    settings_service: tauri::State<'_, SettingsService>,
     port: Option<u16>,
 ) -> Result<WifiTransferStatus, AppError> {
-    crate::services::wifi_transfer::start_server(&transfer_service, port).await
+    let settings = settings_service.get_settings()?;
+    let custom_dir = if settings.wifi_upload_dir.is_empty() {
+        None
+    } else {
+        Some(settings.wifi_upload_dir)
+    };
+    let max_gb = settings.wifi_max_upload_gb.clamp(1, 50);
+    crate::services::wifi_transfer::start_server(
+        &transfer_service,
+        port,
+        custom_dir,
+        max_gb,
+        settings.locale,
+    )
+    .await
 }
 
 #[tauri::command]
@@ -114,4 +130,34 @@ pub async fn get_wifi_transfer_status(
     transfer_service: tauri::State<'_, TransferService>,
 ) -> Result<WifiTransferStatus, AppError> {
     Ok(transfer_service.get_wifi_transfer_status())
+}
+
+#[tauri::command]
+pub async fn list_wifi_received_files(
+    transfer_service: tauri::State<'_, TransferService>,
+) -> Result<Vec<FileEntry>, AppError> {
+    transfer_service.list_wifi_received_files()
+}
+
+#[tauri::command]
+pub async fn delete_wifi_received_file(
+    transfer_service: tauri::State<'_, TransferService>,
+    name: String,
+) -> Result<(), AppError> {
+    transfer_service.delete_wifi_received_file(&name)
+}
+
+#[tauri::command]
+pub async fn clear_wifi_received_files(
+    transfer_service: tauri::State<'_, TransferService>,
+) -> Result<(), AppError> {
+    transfer_service.clear_wifi_received_files()?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn open_wifi_upload_dir(
+    transfer_service: tauri::State<'_, TransferService>,
+) -> Result<(), AppError> {
+    transfer_service.open_wifi_upload_dir()
 }

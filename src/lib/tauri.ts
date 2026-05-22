@@ -79,6 +79,14 @@ export const tauriApi = {
     invoke<void>("stop_wifi_transfer"),
   getWifiTransferStatus: () =>
     invoke<WifiTransferStatus>("get_wifi_transfer_status"),
+  listWifiReceivedFiles: () =>
+    invoke<FileEntry[]>("list_wifi_received_files"),
+  deleteWifiReceivedFile: (name: string) =>
+    invoke<void>("delete_wifi_received_file", { name }),
+  clearWifiReceivedFiles: () =>
+    invoke<void>("clear_wifi_received_files"),
+  openWifiUploadDir: () =>
+    invoke<void>("open_wifi_upload_dir"),
 
   // Mirror
   startMirror: (serial: string, config: MirrorConfig) =>
@@ -127,4 +135,6 @@ export const tauriApi = {
     listen<MirrorSession>("mirror://session-updated", (e) =>
       handler(e.payload)
     ),
+  onFileReceived: (handler: (path: string) => void) =>
+    listen<string>("transfer://file-received", (e) => handler(e.payload)),
 };

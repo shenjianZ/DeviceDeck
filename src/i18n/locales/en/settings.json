@@ -28,7 +28,13 @@
     "autoScan": "Auto Scan Devices",
     "autoScanDesc": "Auto-refresh USB and Android 11+ WiFi wireless debug devices",
     "scanInterval": "Scan Interval",
-    "scanIntervalDesc": "Range 5-600 seconds, shorter = more responsive"
+    "scanIntervalDesc": "Range 5-600 seconds, shorter = more responsive",
+    "wifiUploadDir": "WiFi Upload Directory",
+    "wifiUploadDirDesc": "Where received WiFi transfer files are stored",
+    "wifiMaxUploadSize": "Max Upload File Size",
+    "wifiMaxUploadSizeDesc": "Maximum single file size for WiFi upload",
+    "chooseDir": "Choose Directory",
+    "resetDefault": "Reset Default"
   },
   "mirror": {
     "title": "Default Mirror Config",

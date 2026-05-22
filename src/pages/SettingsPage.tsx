@@ -300,6 +300,52 @@ export function SettingsPage() {
               />
             </div>
           </section>
+
+          <section className="settings-section">
+            <div className="settings-row">
+              <div>
+                <div style={{ fontWeight: 500 }}>{t("settings:tools.wifiUploadDir")}</div>
+                <div className="settings-desc">{t("settings:tools.wifiUploadDirDesc")}</div>
+              </div>
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                {settings.wifiUploadDir && (
+                  <button className="btn btn-g" style={{ padding: "4px 8px", fontSize: 12 }} onClick={() => updateSetting("wifiUploadDir", "")} type="button">
+                    {t("settings:tools.resetDefault")}
+                  </button>
+                )}
+                <button className="btn btn-g" style={{ padding: "4px 8px", fontSize: 12 }} onClick={async () => {
+                  const selected = await open({ directory: true, multiple: false });
+                  if (typeof selected === "string") updateSetting("wifiUploadDir", selected);
+                }} type="button">
+                  {t("settings:tools.chooseDir")}
+                </button>
+              </div>
+            </div>
+            {settings.wifiUploadDir && (
+              <div style={{ fontSize: 12, color: "var(--t2)", marginTop: 4, fontFamily: "monospace", wordBreak: "break-all" }}>
+                {settings.wifiUploadDir}
+              </div>
+            )}
+            <div className="settings-row">
+              <div>
+                <div style={{ fontWeight: 500 }}>{t("settings:tools.wifiMaxUploadSize")}</div>
+                <div className="settings-desc">{t("settings:tools.wifiMaxUploadSizeDesc")}</div>
+              </div>
+              <Dropdown
+                className="settings-compact-select"
+                value={String(settings.wifiMaxUploadGB ?? 2)}
+                onChange={(v) => updateSetting("wifiMaxUploadGB", parseInt(v, 10))}
+                options={[
+                  { value: "1", label: "1 GB" },
+                  { value: "2", label: "2 GB" },
+                  { value: "5", label: "5 GB" },
+                  { value: "10", label: "10 GB" },
+                  { value: "20", label: "20 GB" },
+                  { value: "50", label: "50 GB" },
+                ]}
+              />
+            </div>
+          </section>
         </>
       );
     }

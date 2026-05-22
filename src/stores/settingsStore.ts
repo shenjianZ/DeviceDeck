@@ -43,6 +43,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   autoStart: false,
   autoUpdateEnabled: true,
   firstRun: true,
+  wifiUploadDir: "",
+  wifiMaxUploadGB: 2,
 };
 
 function applyFontSize(fontSize: number) {

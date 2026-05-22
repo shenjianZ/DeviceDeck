@@ -432,6 +432,10 @@ pub struct AppSettings {
     pub auto_update_enabled: bool,
     #[serde(default = "default_first_run")]
     pub first_run: bool,
+    #[serde(default)]
+    pub wifi_upload_dir: String,
+    #[serde(default = "default_wifi_max_upload_gb")]
+    pub wifi_max_upload_gb: u32,
 }
 
 impl Default for AppSettings {
@@ -452,6 +456,8 @@ impl Default for AppSettings {
             auto_start: false,
             auto_update_enabled: default_auto_update_enabled(),
             first_run: default_first_run(),
+            wifi_upload_dir: String::new(),
+            wifi_max_upload_gb: default_wifi_max_upload_gb(),
         }
     }
 }
@@ -478,6 +484,10 @@ fn default_auto_update_enabled() -> bool {
 
 fn default_first_run() -> bool {
     true
+}
+
+fn default_wifi_max_upload_gb() -> u32 {
+    2
 }
 
 #[cfg(test)]

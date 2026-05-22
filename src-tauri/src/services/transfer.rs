@@ -9,6 +9,7 @@ pub struct TransferService {
     app_handle: tauri::AppHandle,
     wifi_status: Arc<std::sync::Mutex<WifiTransferStatus>>,
     shutdown_tx: Arc<std::sync::Mutex<Option<tokio::sync::watch::Sender<bool>>>>,
+    wifi_upload_dir: Arc<std::sync::Mutex<Option<std::path::PathBuf>>>,
 }
 
 impl TransferService {
@@ -24,6 +25,7 @@ impl TransferService {
                 port: 0,
             })),
             shutdown_tx: Arc::new(std::sync::Mutex::new(None)),
+            wifi_upload_dir: Arc::new(std::sync::Mutex::new(None)),
         }
     }
 
@@ -110,5 +112,131 @@ impl TransferService {
 
     pub fn adb_path(&self) -> Result<std::path::PathBuf, AppError> {
         self.android_provider.get_adb_path()
+    }
+
+    pub fn set_wifi_upload_dir(&self, dir: std::path::PathBuf) {
+        if let Ok(mut d) = self.wifi_upload_dir.lock() {
+            *d = Some(dir);
+        }
+    }
+
+    pub fn clear_wifi_upload_dir(&self) {
+        if let Ok(mut d) = self.wifi_upload_dir.lock() {
+            *d = None;
+        }
+    }
+
+    pub fn get_wifi_upload_dir(&self) -> Option<std::path::PathBuf> {
+        self.wifi_upload_dir.lock().ok().and_then(|d| d.clone())
+    }
+
+    pub fn list_wifi_received_files(&self) -> Result<Vec<FileEntry>, AppError> {
+        let dir = self
+            .get_wifi_upload_dir()
+            .ok_or_else(|| AppError::internal_error("WiFi transfer not running"))?;
+        let mut files = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(&dir) {
+            for entry in entries.flatten() {
+                if let Ok(metadata) = entry.metadata() {
+                    if let Some(name) = entry.file_name().to_str() {
+                        files.push(FileEntry {
+                            name: name.to_string(),
+                            path: entry.path().to_string_lossy().into_owned(),
+                            is_directory: metadata.is_dir(),
+                            size: if metadata.is_file() {
+                                Some(metadata.len())
+                            } else {
+                                None
+                            },
+                            modified: metadata.modified().ok().map(|t| {
+                                let datetime: chrono::DateTime<chrono::Local> = t.into();
+                                datetime.format("%Y-%m-%d %H:%M").to_string()
+                            }),
+                            permissions: None,
+                        });
+                    }
+                }
+            }
+        }
+        files.sort_by(|a, b| {
+            b.is_directory
+                .cmp(&a.is_directory)
+                .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+        });
+        Ok(files)
+    }
+
+    pub fn delete_wifi_received_file(&self, name: &str) -> Result<(), AppError> {
+        let dir = self
+            .get_wifi_upload_dir()
+            .ok_or_else(|| AppError::internal_error("WiFi transfer not running"))?;
+        let sanitized: String = name
+            .chars()
+            .map(|c| {
+                if c.is_control()
+                    || matches!(
+                        c,
+                        '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' | '\'' | '`'
+                    )
+                {
+                    '_'
+                } else {
+                    c
+                }
+            })
+            .collect();
+        let sanitized = sanitized.trim_matches([' ', '.']).to_string();
+        let name = if sanitized.is_empty() {
+            "unknown".into()
+        } else {
+            sanitized
+        };
+        let path = dir.join(&name);
+        if !path.starts_with(&dir) {
+            return Err(AppError::internal_error("Invalid file path"));
+        }
+        if path.is_dir() {
+            std::fs::remove_dir_all(&path)?;
+        } else {
+            std::fs::remove_file(&path)?;
+        }
+        Ok(())
+    }
+
+    pub fn clear_wifi_received_files(&self) -> Result<usize, AppError> {
+        let dir = self
+            .get_wifi_upload_dir()
+            .ok_or_else(|| AppError::internal_error("WiFi transfer not running"))?;
+        let mut count = 0usize;
+        if let Ok(entries) = std::fs::read_dir(&dir) {
+            for entry in entries.flatten() {
+                if let Ok(metadata) = entry.metadata() {
+                    let removed = if metadata.is_dir() {
+                        std::fs::remove_dir_all(entry.path()).is_ok()
+                    } else if metadata.is_file() {
+                        std::fs::remove_file(entry.path()).is_ok()
+                    } else {
+                        false
+                    };
+                    if removed {
+                        count += 1;
+                    }
+                }
+            }
+        }
+        Ok(count)
+    }
+
+    pub fn open_wifi_upload_dir(&self) -> Result<(), AppError> {
+        let dir = self
+            .get_wifi_upload_dir()
+            .ok_or_else(|| AppError::internal_error("WiFi transfer not running"))?;
+        #[cfg(target_os = "windows")]
+        std::process::Command::new("explorer").arg(&dir).spawn()?;
+        #[cfg(target_os = "macos")]
+        std::process::Command::new("open").arg(&dir).spawn()?;
+        #[cfg(target_os = "linux")]
+        std::process::Command::new("xdg-open").arg(&dir).spawn()?;
+        Ok(())
     }
 }

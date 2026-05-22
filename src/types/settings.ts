@@ -16,6 +16,8 @@ export interface AppSettings {
   autoStart?: boolean;
   autoUpdateEnabled?: boolean;
   firstRun?: boolean;
+  wifiUploadDir?: string;
+  wifiMaxUploadGB?: number;
 }
 
 export interface ToolStatus {
