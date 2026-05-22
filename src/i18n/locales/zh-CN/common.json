@@ -11,7 +11,8 @@
     "refresh": "刷新",
     "clear": "清空",
     "stop": "停止",
-    "stopping": "停止中..."
+    "stopping": "停止中...",
+    "copy": "复制"
   },
   "toast": {
     "saveSuccess": "设置已保存",

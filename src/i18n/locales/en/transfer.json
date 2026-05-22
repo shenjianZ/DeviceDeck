@@ -71,6 +71,7 @@
   "openDirFailed": "Failed to open directory",
   "noFiles": "No received files",
   "selectPullDir": "Select Save Location",
+  "copySuccess": "Copied to clipboard",
   "bytes": "B",
   "kilobytes": "KB",
   "megabytes": "MB",

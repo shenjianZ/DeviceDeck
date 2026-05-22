@@ -11,7 +11,8 @@
     "refresh": "Refresh",
     "clear": "Clear",
     "stop": "Stop",
-    "stopping": "Stopping..."
+    "stopping": "Stopping...",
+    "copy": "Copy"
   },
   "toast": {
     "saveSuccess": "Settings saved",

@@ -27,6 +27,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { Dropdown } from "../components/ui/Dropdown";
 import { useDeviceStore } from "../stores/deviceStore";
 import { useTransferStore } from "../stores/transferStore";
+import { useNotificationStore } from "../stores/notificationStore";
 import type { FileEntry, TransferProgress } from "../types";
 
 type TransferMode = "usb" | "wifi";
@@ -907,7 +908,7 @@ function FileRow({
 /* ======================== Wi-Fi Panel ======================== */
 
 function WifiTransferPanel() {
-  const { t } = useTranslation("transfer");
+  const { t } = useTranslation(["transfer", "common"]);
   const wifiStatus = useTransferStore((s) => s.wifiStatus);
   const isWifiBusy = useTransferStore((s) => s.isWifiBusy);
   const receivedFiles = useTransferStore((s) => s.receivedFiles);
@@ -918,6 +919,7 @@ function WifiTransferPanel() {
   const deleteReceivedFile = useTransferStore((s) => s.deleteReceivedFile);
   const clearReceivedFiles = useTransferStore((s) => s.clearReceivedFiles);
   const openUploadDir = useTransferStore((s) => s.openUploadDir);
+  const showSuccess = useNotificationStore((s) => s.showSuccess);
 
   const isRunning = wifiStatus?.running ?? false;
 
@@ -934,10 +936,11 @@ function WifiTransferPanel() {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
+    showSuccess(t("copySuccess"));
   };
 
   return (
-    <div>
+    <div style={{ display: "flex", flexDirection: "column", minHeight: 0, overflowY: "auto" }}>
       <div className="card" style={{ padding: 24, textAlign: "center" }}>
         <div style={{ marginBottom: 16 }}>
           {isRunning ? (
@@ -969,8 +972,16 @@ function WifiTransferPanel() {
                 {t("wifiUrl")}
               </div>
               <div className="row" style={{ justifyContent: "center", gap: 8 }}>
-                <code style={{ fontSize: 14, color: "var(--acc)", userSelect: "all" }}>{wifiStatus.url}</code>
-                <button className="btn btn-g" style={{ padding: 2 }} onClick={() => copyToClipboard(wifiStatus.url!)} type="button">
+                <code style={{ fontSize: 14, color: "var(--acc)", userSelect: "all" }}>
+                  {wifiStatus.token ? `${wifiStatus.url}?token=${wifiStatus.token}` : wifiStatus.url}
+                </code>
+                <button
+                  className="btn btn-g"
+                  style={{ padding: 2 }}
+                  onClick={() => copyToClipboard(wifiStatus.token ? `${wifiStatus.url}?token=${wifiStatus.token}` : wifiStatus.url!)}
+                  type="button"
+                  title={t("common:buttons.copy")}
+                >
                   <Copy size={14} />
                 </button>
               </div>
@@ -985,7 +996,7 @@ function WifiTransferPanel() {
                   <code style={{ fontSize: 20, fontWeight: 700, letterSpacing: "0.15em", color: "var(--acc)" }}>
                     {wifiStatus.token}
                   </code>
-                  <button className="btn btn-g" style={{ padding: 2 }} onClick={() => copyToClipboard(wifiStatus.token!)} type="button">
+                  <button className="btn btn-g" style={{ padding: 2 }} onClick={() => copyToClipboard(wifiStatus.token!)} type="button" title={t("common:buttons.copy")}>
                     <Copy size={14} />
                   </button>
                 </div>

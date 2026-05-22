@@ -1,10 +1,14 @@
 use std::io::{self, Seek, Write};
 use std::net::SocketAddr;
 use std::path::{Path as FsPath, PathBuf};
+use std::sync::{Mutex, OnceLock};
 
 use axum::{
     body::{Body, Bytes},
-    extract::{DefaultBodyLimit, Multipart, Path, Query, State},
+    extract::{
+        ws::{Message, WebSocket, WebSocketUpgrade},
+        DefaultBodyLimit, Multipart, Path, Query, State,
+    },
     http::{header, HeaderValue, StatusCode},
     response::{Html, IntoResponse, Json, Response},
     routing::{delete, get, post},
@@ -14,6 +18,7 @@ use base64::Engine;
 use qrcode::QrCode;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
+use tokio::sync::broadcast;
 use tokio::sync::mpsc;
 use tokio::sync::watch;
 use tokio_stream::wrappers::ReceiverStream;
@@ -24,6 +29,9 @@ use crate::core::types::WifiTransferStatus;
 use crate::services::transfer::TransferService;
 
 const DEFAULT_PORT: u16 = 37210;
+const WIFI_EVENT_CHANNEL_SIZE: usize = 256;
+
+static WIFI_EVENT_TX: OnceLock<Mutex<Option<broadcast::Sender<WifiFileEvent>>>> = OnceLock::new();
 
 #[derive(Clone)]
 struct AppState {
@@ -31,12 +39,15 @@ struct AppState {
     upload_dir: PathBuf,
     app_handle: tauri::AppHandle,
     locale: String,
+    event_tx: broadcast::Sender<WifiFileEvent>,
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct VerifyQuery {
     token: Option<String>,
     path: Option<String>,
+    client_id: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -46,6 +57,47 @@ struct FileInfo {
     path: String,
     size: u64,
     is_directory: bool,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WifiFileEvent {
+    id: String,
+    #[serde(rename = "type")]
+    event_type: String,
+    path: Option<String>,
+    actor_client_id: Option<String>,
+    timestamp: i64,
+}
+
+pub fn broadcast_wifi_file_event(
+    event_type: &str,
+    path: Option<String>,
+    actor_client_id: Option<String>,
+) {
+    let event = WifiFileEvent {
+        id: nanoid::nanoid!(10),
+        event_type: event_type.to_string(),
+        path,
+        actor_client_id,
+        timestamp: chrono::Utc::now().timestamp_millis(),
+    };
+
+    if let Ok(guard) = wifi_event_bus().lock() {
+        if let Some(tx) = guard.as_ref() {
+            let _ = tx.send(event);
+        }
+    }
+}
+
+fn wifi_event_bus() -> &'static Mutex<Option<broadcast::Sender<WifiFileEvent>>> {
+    WIFI_EVENT_TX.get_or_init(|| Mutex::new(None))
+}
+
+fn set_wifi_event_tx(tx: Option<broadcast::Sender<WifiFileEvent>>) {
+    if let Ok(mut guard) = wifi_event_bus().lock() {
+        *guard = tx;
+    }
 }
 
 pub async fn start_server(
@@ -90,11 +142,14 @@ pub async fn start_server(
         base64::engine::general_purpose::STANDARD.encode(qr_png.as_bytes())
     );
 
+    let (event_tx, _) = broadcast::channel(WIFI_EVENT_CHANNEL_SIZE);
+
     let state = AppState {
         token: token.clone(),
         upload_dir: upload_dir.clone(),
         app_handle: transfer_service.app_handle(),
         locale: normalize_locale(&locale).to_string(),
+        event_tx: event_tx.clone(),
     };
 
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
@@ -106,6 +161,7 @@ pub async fn start_server(
         .route("/api/files", get(list_files))
         .route("/api/download/{*path}", get(download_file))
         .route("/api/files/{*path}", delete(delete_file))
+        .route("/ws", get(wifi_events))
         .layer(DefaultBodyLimit::max(max_upload_bytes))
         .layer(tower_http::cors::CorsLayer::permissive())
         .with_state(state);
@@ -125,6 +181,7 @@ pub async fn start_server(
 
     transfer_service.update_wifi_status(status.clone());
     transfer_service.set_wifi_upload_dir(upload_dir.clone());
+    set_wifi_event_tx(Some(event_tx));
 
     let status_for_shutdown = status.clone();
     tokio::spawn(async move {
@@ -162,6 +219,7 @@ pub async fn stop_server(transfer_service: &TransferService) -> Result<(), AppEr
 
     transfer_service.send_shutdown()?;
     transfer_service.clear_wifi_upload_dir();
+    set_wifi_event_tx(None);
 
     transfer_service.update_wifi_status(WifiTransferStatus {
         running: false,
@@ -199,6 +257,47 @@ async fn verify_token(
         Json(serde_json::json!({ "valid": true }))
     } else {
         Json(serde_json::json!({ "valid": false }))
+    }
+}
+
+async fn wifi_events(
+    ws: WebSocketUpgrade,
+    Query(query): Query<VerifyQuery>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    if query.token.as_deref() != Some(&state.token) {
+        return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
+    }
+
+    let rx = state.event_tx.subscribe();
+    ws.on_upgrade(move |socket| stream_wifi_events(socket, rx))
+        .into_response()
+}
+
+async fn stream_wifi_events(mut socket: WebSocket, mut rx: broadcast::Receiver<WifiFileEvent>) {
+    let mut heartbeat = tokio::time::interval(std::time::Duration::from_secs(30));
+    loop {
+        tokio::select! {
+            event = rx.recv() => {
+                match event {
+                    Ok(event) => {
+                        let Ok(payload) = serde_json::to_string(&event) else {
+                            continue;
+                        };
+                        if socket.send(Message::Text(payload.into())).await.is_err() {
+                            break;
+                        }
+                    }
+                    Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                    Err(broadcast::error::RecvError::Closed) => break,
+                }
+            }
+            _ = heartbeat.tick() => {
+                if socket.send(Message::Ping(Bytes::new())).await.is_err() {
+                    break;
+                }
+            }
+        }
     }
 }
 
@@ -251,6 +350,11 @@ async fn upload_file(
             "transfer://file-received",
             dest.to_string_lossy().into_owned(),
         );
+        let event_path = dest
+            .strip_prefix(&state.upload_dir)
+            .map(path_to_slash_string)
+            .unwrap_or_else(|_| path_to_slash_string(&safe_path));
+        broadcast_wifi_file_event("file.created", Some(event_path), query.client_id.clone());
     }
 
     (StatusCode::OK, Json(serde_json::json!({ "ok": true })))
@@ -432,22 +536,28 @@ async fn delete_file(
     }
 
     let relative = sanitize_relative_path(&path);
-    let path = state.upload_dir.join(&relative);
+    let file_path = state.upload_dir.join(&relative);
 
-    if !path.starts_with(&state.upload_dir) {
+    if !file_path.starts_with(&state.upload_dir) {
         return (StatusCode::BAD_REQUEST, "Invalid path").into_response();
     }
 
-    match tokio::fs::metadata(&path).await {
-        Ok(metadata) if metadata.is_dir() => match tokio::fs::remove_dir_all(&path).await {
-            Ok(_) => (StatusCode::OK, "Deleted").into_response(),
-            Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Delete failed").into_response(),
-        },
-        Ok(_) => match tokio::fs::remove_file(&path).await {
-            Ok(_) => (StatusCode::OK, "Deleted").into_response(),
-            Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Delete failed").into_response(),
-        },
-        Err(_) => (StatusCode::NOT_FOUND, "File not found").into_response(),
+    let result = match tokio::fs::metadata(&file_path).await {
+        Ok(metadata) if metadata.is_dir() => tokio::fs::remove_dir_all(&file_path).await,
+        Ok(_) => tokio::fs::remove_file(&file_path).await,
+        Err(_) => return (StatusCode::NOT_FOUND, "File not found").into_response(),
+    };
+
+    match result {
+        Ok(_) => {
+            broadcast_wifi_file_event(
+                "file.deleted",
+                Some(path_to_slash_string(&relative)),
+                query.client_id.clone(),
+            );
+            (StatusCode::OK, "Deleted").into_response()
+        }
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Delete failed").into_response(),
     }
 }
 
@@ -1312,6 +1422,8 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
   let isConnected = true;
   let heartbeatTimer = null;
   let reconnectTimer = null;
+  let eventsSocket = null;
+  let eventsReconnectTimer = null;
 
   const authScreen = $('#auth');
   const mainScreen = $('#main');
@@ -1349,6 +1461,7 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
 
   const initialLocale = '__DD_LOCALE__';
   const locale = initialLocale === 'en' ? 'en' : 'zh-CN';
+  const clientId = getClientId();
   const messages = {
     'zh-CN': {
       pageTitle: 'DeviceDeck 文件传输',
@@ -1572,6 +1685,7 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
         token = code;
         showScreen('main');
         startHeartbeat();
+        connectEventSocket();
         loadFiles();
       } else {
         authError.textContent = t('invalidToken');
@@ -1635,6 +1749,7 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
   function stopHeartbeat() {
     if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    closeEventSocket();
   }
 
   async function checkConnection() {
@@ -1680,6 +1795,7 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
         const d = await r.json();
         if (d.valid) {
           setConnectionState(true);
+          connectEventSocket();
           showToast('success', t('reconnected'));
           loadFiles();
         } else {
@@ -1688,6 +1804,78 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
       } catch {
         scheduleReconnect();
       }
+    }, 3000);
+  }
+
+  function getClientId() {
+    try {
+      const key = 'devicedeck-wifi-client-id';
+      let value = localStorage.getItem(key);
+      if (!value) {
+        value = Math.random().toString(36).slice(2) + Date.now().toString(36);
+        localStorage.setItem(key, value);
+      }
+      return value;
+    } catch {
+      return Math.random().toString(36).slice(2) + Date.now().toString(36);
+    }
+  }
+
+  function eventSocketUrl() {
+    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const params = new URLSearchParams({ token, clientId });
+    return protocol + '//' + location.host + '/ws?' + params.toString();
+  }
+
+  function connectEventSocket() {
+    if (!token || (eventsSocket && eventsSocket.readyState <= WebSocket.OPEN)) return;
+    if (eventsReconnectTimer) {
+      clearTimeout(eventsReconnectTimer);
+      eventsReconnectTimer = null;
+    }
+
+    const socket = new WebSocket(eventSocketUrl());
+    eventsSocket = socket;
+
+    socket.addEventListener('open', () => {
+      if (eventsSocket !== socket) return;
+      if (!isConnected) setConnectionState(true);
+    });
+    socket.addEventListener('message', e => {
+      if (eventsSocket !== socket) return;
+      try {
+        const event = JSON.parse(e.data);
+        if (event.actorClientId && event.actorClientId === clientId) return;
+        loadFiles();
+      } catch {}
+    });
+    socket.addEventListener('close', () => {
+      if (eventsSocket !== socket) return;
+      eventsSocket = null;
+      scheduleEventSocketReconnect();
+    });
+    socket.addEventListener('error', () => {
+      try { socket.close(); } catch {}
+    });
+  }
+
+  function closeEventSocket() {
+    if (eventsReconnectTimer) {
+      clearTimeout(eventsReconnectTimer);
+      eventsReconnectTimer = null;
+    }
+    if (eventsSocket) {
+      const socket = eventsSocket;
+      eventsSocket = null;
+      try { socket.close(); } catch {}
+    }
+  }
+
+  function scheduleEventSocketReconnect() {
+    if (!token || eventsReconnectTimer) return;
+    eventsReconnectTimer = setTimeout(() => {
+      eventsReconnectTimer = null;
+      connectEventSocket();
     }, 3000);
   }
 
@@ -2183,7 +2371,8 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
       fd.append('files', item.file, item.file.name);
       const xhr = new XMLHttpRequest();
       item.xhr = xhr;
-      xhr.open('POST', '/api/upload?token=' + encodeURIComponent(token));
+      const params = new URLSearchParams({ token, clientId });
+      xhr.open('POST', '/api/upload?' + params.toString());
 
       xhr.upload.addEventListener('progress', e => {
         if (e.lengthComputable && item.status === 'uploading') {
@@ -2343,7 +2532,8 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
 
   async function deleteFile(path, name) {
     try {
-      const r = await fetch('/api/files/' + apiPath(path) + '?token=' + encodeURIComponent(token), { method: 'DELETE' });
+      const params = new URLSearchParams({ token, clientId });
+      const r = await fetch('/api/files/' + apiPath(path) + '?' + params.toString(), { method: 'DELETE' });
       if (r.ok) {
         showToast('success', t('deleted') + name);
         loadFiles();
@@ -2360,7 +2550,8 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
     let deleted = 0;
     for (const f of files) {
       try {
-        const r = await fetch('/api/files/' + apiPath(f.path || f.name) + '?token=' + encodeURIComponent(token), { method: 'DELETE' });
+        const params = new URLSearchParams({ token, clientId });
+        const r = await fetch('/api/files/' + apiPath(f.path || f.name) + '?' + params.toString(), { method: 'DELETE' });
         if (r.ok) deleted++;
       } catch {}
     }

@@ -71,6 +71,7 @@
   "openDirFailed": "打开目录失败",
   "noFiles": "暂无已接收文件",
   "selectPullDir": "选择保存位置",
+  "copySuccess": "已复制到剪贴板",
   "bytes": "B",
   "kilobytes": "KB",
   "megabytes": "MB",

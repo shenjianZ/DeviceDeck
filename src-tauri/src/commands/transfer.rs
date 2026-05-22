@@ -144,14 +144,19 @@ pub async fn delete_wifi_received_file(
     transfer_service: tauri::State<'_, TransferService>,
     name: String,
 ) -> Result<(), AppError> {
-    transfer_service.delete_wifi_received_file(&name)
+    transfer_service.delete_wifi_received_file(&name)?;
+    crate::services::wifi_transfer::broadcast_wifi_file_event("file.deleted", Some(name), None);
+    Ok(())
 }
 
 #[tauri::command]
 pub async fn clear_wifi_received_files(
     transfer_service: tauri::State<'_, TransferService>,
 ) -> Result<(), AppError> {
-    transfer_service.clear_wifi_received_files()?;
+    let count = transfer_service.clear_wifi_received_files()?;
+    if count > 0 {
+        crate::services::wifi_transfer::broadcast_wifi_file_event("files.cleared", None, None);
+    }
     Ok(())
 }
 
