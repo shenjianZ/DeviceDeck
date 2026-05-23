@@ -34,6 +34,11 @@ const slides = [
     desc: { zh: 'WiFi 无线传输，无需数据线', en: 'Wireless WiFi transfer — no cables needed' },
   },
   {
+    tab: 'WiFi Web 传输', tabEn: 'WiFi Web Transfer',
+    img: `${import.meta.env.BASE_URL}app-img/wifi-transfer-web.png`,
+    desc: { zh: '手机浏览器扫码即传，无需安装客户端', en: 'Scan QR to transfer from mobile browser — no app needed' },
+  },
+  {
     tab: '镜像设置', tabEn: 'Mirror Settings',
     img: `${import.meta.env.BASE_URL}app-img/settings-mirror.png`,
     desc: { zh: '分辨率、帧率、编码器、码率精细调控', en: 'Fine-tune resolution, FPS, codec, and bitrate' },
