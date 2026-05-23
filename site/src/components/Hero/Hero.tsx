@@ -34,7 +34,7 @@ export default function Hero() {
             </a>
           </div>
           <div className="hero-platform anim">
-            <span className="platform-badge accent">v0.1.3</span>
+            <span className="platform-badge accent">v0.1.4</span>
             <span className="platform-badge">Windows</span>
             <span className="platform-badge">macOS</span>
             <span className="platform-badge">Linux</span>

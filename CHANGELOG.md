@@ -2,6 +2,18 @@
 
 本文件记录 DeviceDeck 的版本更新历史。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [0.1.4] - 2026-05-23
+
+### Added
+
+- WiFi 传输可配置分块大小（chunk size）和并发数（concurrency），通过 `config.json` 自定义传输参数
+- WiFi Web 传输截图展示在官方网站轮播中
+
+### Changed
+
+- 优化项目文档结构，添加中英双语 README.md 和 README_ZH.md
+- 更新站点静态资源，添加 wifi-transfer-web.png
+
 ## [0.1.3] - 2026-05-23
 
 ### Added

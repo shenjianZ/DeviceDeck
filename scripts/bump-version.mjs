@@ -82,23 +82,18 @@ replaceInFile("src-tauri/tauri.conf.json", /"version": ".*"/, `"version": "${new
 console.log(`  ✓ src-tauri/tauri.conf.json → ${newVersion}`);
 
 // --- Site: 同步 site 文件中的 vX.Y.Z ---
-const oldTag = `v${oldVersion}`;
-const newTag = `v${newVersion}`;
+console.log(`\n🌐 Site (同步版本号):`);
 
-if (oldVersion !== newVersion) {
-  console.log(`\n🌐 Site (同步 ${oldTag} → ${newTag}):`);
+// i18n translations.ts — hero.badge
+replaceInFile("site/src/i18n/translations.ts", /v\d+\.\d+\.\d+(-[\w.]+)?/g, `v${newVersion}`);
+console.log(`  ✓ site/src/i18n/translations.ts`);
 
-  // i18n translations.ts — hero.badge
-  replaceInFile("site/src/i18n/translations.ts", new RegExp(escapeRegex(oldTag), "g"), newTag);
-  console.log(`  ✓ site/src/i18n/translations.ts`);
+// Download.tsx — 下载链接与 release 标签
+replaceInFile("site/src/components/Download/Download.tsx", /v\d+\.\d+\.\d+(-[\w.]+)?/g, `v${newVersion}`);
+console.log(`  ✓ site/src/components/Download/Download.tsx`);
 
-  // Download.tsx — 下载链接与 release 标签
-  replaceInFile("site/src/components/Download/Download.tsx", new RegExp(escapeRegex(oldTag), "g"), newTag);
-  console.log(`  ✓ site/src/components/Download/Download.tsx`);
-
-  // Hero.tsx — 平台版本徽章
-  replaceInFile("site/src/components/Hero/Hero.tsx", new RegExp(escapeRegex(oldTag), "g"), newTag);
-  console.log(`  ✓ site/src/components/Hero/Hero.tsx`);
-}
+// Hero.tsx — 平台版本徽章
+replaceInFile("site/src/components/Hero/Hero.tsx", /v\d+\.\d+\.\d+(-[\w.]+)?/g, `v${newVersion}`);
+console.log(`  ✓ site/src/components/Hero/Hero.tsx`);
 
 console.log(`\n✅ 全部版本号已统一为 ${newVersion}\n`);
