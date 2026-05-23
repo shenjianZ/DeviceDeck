@@ -1734,25 +1734,46 @@ html[data-theme="light"] .theme-icon-moon{display:block}
   outline:none;min-width:0;transition:border-color .15s,background .15s,color .15s;
 }
 .files-search{padding:0 12px}
-.files-select{
-  appearance:none;-webkit-appearance:none;
-  padding:0 32px 0 12px;cursor:pointer;
-  background-image:
-    linear-gradient(45deg,transparent 50%,var(--fg-3) 50%),
-    linear-gradient(135deg,var(--fg-3) 50%,transparent 50%);
-  background-position:
-    calc(100% - 16px) 15px,
-    calc(100% - 11px) 15px;
-  background-size:5px 5px,5px 5px;
-  background-repeat:no-repeat;
-}
+.files-select{display:none}
 .files-search::placeholder{color:var(--fg-3)}
-.files-search:focus,.files-select:focus{
+.files-search:focus{
   border-color:var(--accent-border);
   background-color:var(--surface-3);
   color:var(--fg);
 }
-.files-select:hover,.files-search:hover{border-color:var(--border-hover)}
+.files-search:hover{border-color:var(--border-hover)}
+.dd-lite{position:relative;display:block;min-width:0}
+.dd-lite-trigger{
+  width:100%;height:36px;border:1px solid var(--border);border-radius:var(--r-xs);
+  background:var(--surface-2);color:var(--fg);font-size:12px;font-weight:500;
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:0 10px;cursor:pointer;transition:border-color .15s,box-shadow .15s,background .15s;
+}
+.dd-lite-trigger:hover{border-color:var(--border-hover)}
+.dd-lite.open .dd-lite-trigger,
+.dd-lite-trigger:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.dd-lite-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dd-lite-chevron{
+  width:14px;height:14px;color:var(--fg-3);flex-shrink:0;
+  transition:transform .15s;display:flex;align-items:center;justify-content:center;
+}
+.dd-lite.open .dd-lite-chevron{transform:rotate(180deg)}
+.dd-lite-panel{
+  position:fixed;z-index:9999;
+  max-height:220px;overflow-y:auto;padding:4px;
+  border:1px solid var(--border);border-radius:var(--r-sm);
+  background:var(--surface);box-shadow:0 8px 24px var(--shadow);
+  animation:ddIn .12s ease-out;
+}
+.dd-lite-option{
+  min-height:30px;padding:6px 8px;border-radius:var(--r-xs);
+  color:var(--fg);font-size:12px;display:flex;align-items:center;justify-content:space-between;gap:8px;
+  cursor:pointer;transition:background .1s,color .1s;
+}
+.dd-lite-option:hover,.dd-lite-option.highlight{background:var(--surface-3)}
+.dd-lite-option.active{color:var(--accent);font-weight:600}
+.dd-lite-check{color:var(--accent);font-size:12px;line-height:1}
+@keyframes ddIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
 .files-bulk{
   padding:8px 12px;border-bottom:1px solid var(--border);
   display:none;align-items:center;justify-content:space-between;gap:8px;
@@ -2140,6 +2161,7 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
             <option value="archive">压缩包</option>
             <option value="code">代码</option>
           </select>
+          <div class="dd-lite" data-dropdown-for="files-type-filter"></div>
           <select class="files-select" id="files-sort">
             <option value="name-asc">名称 A-Z</option>
             <option value="name-desc">名称 Z-A</option>
@@ -2148,6 +2170,7 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
             <option value="time-desc">最新优先</option>
             <option value="time-asc">最早优先</option>
           </select>
+          <div class="dd-lite" data-dropdown-for="files-sort"></div>
         </div>
         <div class="files-bulk" id="files-bulk">
           <span id="files-bulk-count">已选择 0 个</span>
@@ -2357,6 +2380,18 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
       fileTooLargePreview: '文本文件超过 2MB，无法在浏览器内预览',
       searchFiles: '搜索文件',
       allTypes: '全部类型',
+      typeImage: '图片',
+      typeVideo: '视频',
+      typeAudio: '音频',
+      typeDoc: '文档',
+      typeArchive: '压缩包',
+      typeCode: '代码',
+      sortNameAsc: '名称 A-Z',
+      sortNameDesc: '名称 Z-A',
+      sortSizeDesc: '大小降序',
+      sortSizeAsc: '大小升序',
+      sortTimeDesc: '最新优先',
+      sortTimeAsc: '最早优先',
       selectedCount: '已选择 ',
       selectedSuffix: ' 个',
       selectAll: '全选',
@@ -2436,6 +2471,18 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
       fileTooLargePreview: 'Text files over 2MB cannot be previewed in the browser',
       searchFiles: 'Search files',
       allTypes: 'All types',
+      typeImage: 'Images',
+      typeVideo: 'Videos',
+      typeAudio: 'Audio',
+      typeDoc: 'Documents',
+      typeArchive: 'Archives',
+      typeCode: 'Code',
+      sortNameAsc: 'Name A-Z',
+      sortNameDesc: 'Name Z-A',
+      sortSizeDesc: 'Size high-low',
+      sortSizeAsc: 'Size low-high',
+      sortTimeDesc: 'Newest first',
+      sortTimeAsc: 'Oldest first',
       selectedCount: 'Selected ',
       selectedSuffix: '',
       selectAll: 'Select all',
@@ -2463,6 +2510,11 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
 
   function setTitle(el, key) {
     if (el) el.title = t(key);
+  }
+
+  function setOptionLabel(select, value, key) {
+    const option = Array.from(select.options).find(option => option.value === value);
+    if (option) option.textContent = t(key);
   }
 
   function applyLocale() {
@@ -2495,7 +2547,19 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
     filesClearAll.lastChild.textContent = t('clearAll');
     filesDownloadAll.lastChild.textContent = t('downloadAll');
     filesSearch.placeholder = t('searchFiles');
-    filesTypeFilter.options[0].textContent = t('allTypes');
+    setOptionLabel(filesTypeFilter, 'all', 'allTypes');
+    setOptionLabel(filesTypeFilter, 'img', 'typeImage');
+    setOptionLabel(filesTypeFilter, 'video', 'typeVideo');
+    setOptionLabel(filesTypeFilter, 'audio', 'typeAudio');
+    setOptionLabel(filesTypeFilter, 'doc', 'typeDoc');
+    setOptionLabel(filesTypeFilter, 'archive', 'typeArchive');
+    setOptionLabel(filesTypeFilter, 'code', 'typeCode');
+    setOptionLabel(filesSort, 'name-asc', 'sortNameAsc');
+    setOptionLabel(filesSort, 'name-desc', 'sortNameDesc');
+    setOptionLabel(filesSort, 'size-desc', 'sortSizeDesc');
+    setOptionLabel(filesSort, 'size-asc', 'sortSizeAsc');
+    setOptionLabel(filesSort, 'time-desc', 'sortTimeDesc');
+    setOptionLabel(filesSort, 'time-asc', 'sortTimeAsc');
     filesSelectAll.textContent = t('selectAll');
     filesBulkDownload.textContent = t('download');
     filesBulkDelete.textContent = t('delete');
@@ -2522,8 +2586,122 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
     setTheme(document.documentElement.dataset.theme === 'light' ? 'dark' : 'light');
   }
 
+  function initCustomDropdowns() {
+    document.querySelectorAll('[data-dropdown-for]').forEach(root => {
+      const select = document.getElementById(root.dataset.dropdownFor);
+      if (!select) return;
+      root.tabIndex = 0;
+      renderCustomDropdown(root, select, false, -1);
+      root.addEventListener('click', e => {
+        e.stopPropagation();
+        const option = e.target.closest('[data-dd-value]');
+        if (option) {
+          select.value = option.dataset.ddValue;
+          select.dispatchEvent(new Event('change', { bubbles: true }));
+          renderCustomDropdown(root, select, false, -1);
+          return;
+        }
+        renderCustomDropdown(root, select, !root.classList.contains('open'), -1);
+      });
+      root.addEventListener('keydown', e => handleDropdownKey(root, select, e));
+    });
+    document.addEventListener('click', e => {
+      document.querySelectorAll('.dd-lite.open').forEach(root => {
+        if (!root.contains(e.target)) {
+          const select = document.getElementById(root.dataset.dropdownFor);
+          if (select) renderCustomDropdown(root, select, false, -1);
+        }
+      });
+    });
+    window.addEventListener('resize', closeOpenDropdowns);
+    window.addEventListener('scroll', closeOpenDropdowns, true);
+  }
+
+  function closeOpenDropdowns() {
+    document.querySelectorAll('.dd-lite.open').forEach(root => {
+      const select = document.getElementById(root.dataset.dropdownFor);
+      if (select) renderCustomDropdown(root, select, false, -1);
+    });
+  }
+
+  function getDropdownPanelStyle(root) {
+    const rect = root.getBoundingClientRect();
+    const gap = 4;
+    const margin = 12;
+    const width = Math.min(rect.width, window.innerWidth - margin * 2);
+    const left = Math.max(margin, Math.min(rect.left, window.innerWidth - width - margin));
+    const top = rect.bottom + gap;
+    const availableHeight = Math.max(32, window.innerHeight - top - margin);
+    return [
+      'left:' + left + 'px',
+      'top:' + top + 'px',
+      'width:' + width + 'px',
+      'max-height:' + Math.min(220, availableHeight) + 'px'
+    ].join(';');
+  }
+
+  function renderCustomDropdown(root, select, open, highlightIndex) {
+    const options = Array.from(select.options);
+    const selectedIndex = Math.max(0, options.findIndex(option => option.value === select.value));
+    const activeIndex = highlightIndex >= 0 ? highlightIndex : selectedIndex;
+    const selected = options[selectedIndex] || options[0];
+    root.classList.toggle('open', open);
+    root.innerHTML =
+      '<button class="dd-lite-trigger" type="button" aria-haspopup="listbox" aria-expanded="' + String(open) + '">' +
+        '<span class="dd-lite-label">' + esc(selected ? selected.textContent : '') + '</span>' +
+        '<span class="dd-lite-chevron"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>' +
+      '</button>' +
+      (open
+        ? '<div class="dd-lite-panel" role="listbox" style="' + getDropdownPanelStyle(root) + '">' + options.map((option, index) =>
+            '<div class="dd-lite-option' +
+              (option.value === select.value ? ' active' : '') +
+              (index === activeIndex ? ' highlight' : '') +
+              '" role="option" aria-selected="' + String(option.value === select.value) + '" data-dd-value="' + esc(option.value) + '">' +
+              '<span>' + esc(option.textContent) + '</span>' +
+              (option.value === select.value ? '<span class="dd-lite-check">✓</span>' : '') +
+            '</div>'
+          ).join('') + '</div>'
+        : '');
+    root.dataset.highlightIndex = String(activeIndex);
+  }
+
+  function handleDropdownKey(root, select, e) {
+    const options = Array.from(select.options);
+    const open = root.classList.contains('open');
+    const current = Number(root.dataset.highlightIndex || options.findIndex(option => option.value === select.value) || 0);
+    if (!open && ['Enter',' ','ArrowDown','ArrowUp'].includes(e.key)) {
+      e.preventDefault();
+      renderCustomDropdown(root, select, true, current);
+      return;
+    }
+    if (!open) return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      renderCustomDropdown(root, select, false, -1);
+      return;
+    }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const next = e.key === 'ArrowDown'
+        ? (current + 1) % options.length
+        : (current - 1 + options.length) % options.length;
+      renderCustomDropdown(root, select, true, next);
+      return;
+    }
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      const option = options[current];
+      if (option) {
+        select.value = option.value;
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      renderCustomDropdown(root, select, false, -1);
+    }
+  }
+
   applyLocale();
   updateFolderPickerAvailability();
+  initCustomDropdowns();
   themeBtn.addEventListener('click', toggleTheme);
   authThemeBtn.addEventListener('click', toggleTheme);
 
