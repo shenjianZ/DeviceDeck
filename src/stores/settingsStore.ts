@@ -44,7 +44,9 @@ const DEFAULT_SETTINGS: AppSettings = {
   autoUpdateEnabled: true,
   firstRun: true,
   wifiUploadDir: "",
-  wifiMaxUploadGB: 2,
+  wifiMaxUploadGB: 10,
+  wifiChunkSizeMB: 16,
+  wifiUploadConcurrency: 2,
 };
 
 function applyFontSize(fontSize: number) {

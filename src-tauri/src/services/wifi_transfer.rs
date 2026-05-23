@@ -41,6 +41,8 @@ struct AppState {
     upload_dir: PathBuf,
     app_handle: tauri::AppHandle,
     locale: String,
+    chunk_size_bytes: u32,
+    upload_concurrency: u32,
     event_tx: broadcast::Sender<WifiFileEvent>,
     history: Arc<Mutex<Vec<TransferHistoryEntry>>>,
 }
@@ -150,6 +152,8 @@ pub async fn start_server(
     port: Option<u16>,
     custom_dir: Option<String>,
     max_upload_gb: u32,
+    chunk_size_mb: u32,
+    upload_concurrency: u32,
     locale: String,
 ) -> Result<WifiTransferStatus, AppError> {
     let current = transfer_service.get_wifi_transfer_status();
@@ -169,6 +173,8 @@ pub async fn start_server(
     tokio::fs::create_dir_all(&upload_dir).await?;
 
     let max_upload_bytes = (max_upload_gb.clamp(1, 50) as usize) * 1024 * 1024 * 1024;
+    let chunk_size_bytes = chunk_size_mb.clamp(1, 64) * 1024 * 1024;
+    let upload_concurrency = upload_concurrency.clamp(1, 4);
 
     let local_ip = local_ip_address::local_ip()
         .unwrap_or_else(|_| std::net::IpAddr::V4([127, 0, 0, 1].into()));
@@ -195,6 +201,8 @@ pub async fn start_server(
         upload_dir: upload_dir.clone(),
         app_handle: transfer_service.app_handle(),
         locale: normalize_locale(&locale).to_string(),
+        chunk_size_bytes,
+        upload_concurrency,
         event_tx: event_tx.clone(),
         history,
     };
@@ -285,7 +293,11 @@ pub async fn stop_server(transfer_service: &TransferService) -> Result<(), AppEr
 }
 
 async fn serve_mobile_page(State(state): State<AppState>) -> Html<String> {
-    Html(render_mobile_html(&state.locale))
+    Html(render_mobile_html(
+        &state.locale,
+        state.chunk_size_bytes,
+        state.upload_concurrency,
+    ))
 }
 
 fn normalize_locale(locale: &str) -> &'static str {
@@ -296,8 +308,19 @@ fn normalize_locale(locale: &str) -> &'static str {
     }
 }
 
-fn render_mobile_html(locale: &str) -> String {
-    MOBILE_HTML.replace("__DD_LOCALE__", normalize_locale(locale))
+fn render_mobile_html(locale: &str, chunk_size_bytes: u32, upload_concurrency: u32) -> String {
+    MOBILE_HTML
+        .replace("__DD_LOCALE__", normalize_locale(locale))
+        .replace(
+            "__DD_CHUNK_SIZE_BYTES__",
+            &chunk_size_bytes
+                .clamp(1024 * 1024, 64 * 1024 * 1024)
+                .to_string(),
+        )
+        .replace(
+            "__DD_UPLOAD_CONCURRENCY__",
+            &upload_concurrency.clamp(1, 4).to_string(),
+        )
 }
 
 async fn verify_token(
@@ -2240,7 +2263,8 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
   const $ = s => document.querySelector(s);
   const MAX_FILE_SIZE = 2147483648;
   const TEXT_PREVIEW_LIMIT = 2097152;
-  const CHUNK_SIZE = 1024 * 1024;
+  const CHUNK_SIZE = Math.max(1024 * 1024, Number(__DD_CHUNK_SIZE_BYTES__) || 1024 * 1024);
+  const MAX_CONCURRENT_UPLOADS = Math.min(4, Math.max(1, Number(__DD_UPLOAD_CONCURRENCY__) || 3));
 
   let token = '';
   let queue = [];
@@ -3393,9 +3417,9 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
     isUploading = true;
     const pending = queue.filter(q => q.status === 'waiting' || q.status === 'error');
 
-    for (const item of pending) {
-      if (!isConnected) break;
-      if (!queue.includes(item) || (item.status !== 'waiting' && item.status !== 'error')) continue;
+    async function uploadQueueItem(item) {
+      if (!isConnected) return;
+      if (!queue.includes(item) || (item.status !== 'waiting' && item.status !== 'error')) return;
       item.status = 'uploading';
       item.progress = 0;
       renderQueue();
@@ -3408,6 +3432,55 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
       }
       renderQueue();
     }
+
+    if (pending.length <= 1 || MAX_CONCURRENT_UPLOADS <= 1) {
+      for (const item of pending) {
+        if (!isConnected) break;
+        await uploadQueueItem(item);
+      }
+      isUploading = false;
+      renderQueue();
+
+      const doneCount = pending.filter(q => q.status === 'done').length;
+      const failCount = pending.filter(q => q.status === 'error').length;
+      if (failCount === 0 && doneCount > 0) {
+        showToast('success', doneCount + t('uploadComplete'));
+        loadFiles();
+        setTimeout(() => {
+          const allDone = queue.every(q => q.status === 'done');
+          if (allDone) {
+            queue = [];
+            renderQueue();
+          }
+        }, 2000);
+      } else if (doneCount > 0) {
+        showToast('warning', doneCount + t('successCount') + failCount + t('failCount'));
+        loadFiles();
+      } else if (failCount > 0) {
+        showToast('error', failCount + t('uploadFailed'));
+      }
+
+      if (uploadRequested && queue.some(q => q.status === 'waiting' || q.status === 'error')) {
+        uploadRequested = false;
+        uploadAll();
+      } else {
+        uploadRequested = false;
+      }
+      return;
+    }
+
+    let cursor = 0;
+
+    async function uploadWorker() {
+      while (isConnected) {
+        const item = pending[cursor++];
+        if (!item) return;
+        await uploadQueueItem(item);
+      }
+    }
+
+    const workerCount = Math.min(MAX_CONCURRENT_UPLOADS, pending.length);
+    await Promise.all(Array.from({ length: workerCount }, uploadWorker));
 
     isUploading = false;
     renderQueue();

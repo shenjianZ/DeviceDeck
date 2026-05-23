@@ -33,6 +33,10 @@
     "wifiUploadDirDesc": "WiFi 传输接收文件的存储位置",
     "wifiMaxUploadSize": "最大上传文件大小",
     "wifiMaxUploadSizeDesc": "WiFi 传输单个文件的最大大小限制",
+    "wifiChunkSize": "上传分片大小",
+    "wifiChunkSizeDesc": "每个 WiFi 上传请求的数据大小，下次启动 WiFi 服务生效",
+    "wifiUploadConcurrency": "并发上传请求",
+    "wifiUploadConcurrencyDesc": "同时上传的队列项数量，范围 1-4，下次启动 WiFi 服务生效",
     "chooseDir": "选择目录",
     "resetDefault": "恢复默认"
   },

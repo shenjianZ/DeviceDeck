@@ -434,8 +434,12 @@ pub struct AppSettings {
     pub first_run: bool,
     #[serde(default)]
     pub wifi_upload_dir: String,
-    #[serde(default = "default_wifi_max_upload_gb")]
+    #[serde(default = "default_wifi_max_upload_gb", rename = "wifiMaxUploadGB")]
     pub wifi_max_upload_gb: u32,
+    #[serde(default = "default_wifi_chunk_size_mb", rename = "wifiChunkSizeMB")]
+    pub wifi_chunk_size_mb: u32,
+    #[serde(default = "default_wifi_upload_concurrency")]
+    pub wifi_upload_concurrency: u32,
 }
 
 impl Default for AppSettings {
@@ -458,6 +462,8 @@ impl Default for AppSettings {
             first_run: default_first_run(),
             wifi_upload_dir: String::new(),
             wifi_max_upload_gb: default_wifi_max_upload_gb(),
+            wifi_chunk_size_mb: default_wifi_chunk_size_mb(),
+            wifi_upload_concurrency: default_wifi_upload_concurrency(),
         }
     }
 }
@@ -487,6 +493,14 @@ fn default_first_run() -> bool {
 }
 
 fn default_wifi_max_upload_gb() -> u32 {
+    10
+}
+
+fn default_wifi_chunk_size_mb() -> u32 {
+    16
+}
+
+fn default_wifi_upload_concurrency() -> u32 {
     2
 }
 
@@ -500,6 +514,9 @@ mod tests {
 
         assert!(settings.auto_scan_devices);
         assert_eq!(settings.device_scan_interval_seconds, 30);
+        assert_eq!(settings.wifi_max_upload_gb, 10);
+        assert_eq!(settings.wifi_chunk_size_mb, 16);
+        assert_eq!(settings.wifi_upload_concurrency, 2);
     }
 
     #[test]
@@ -525,6 +542,25 @@ mod tests {
 
         assert!(settings.auto_scan_devices);
         assert_eq!(settings.device_scan_interval_seconds, 30);
+        assert_eq!(settings.wifi_max_upload_gb, 10);
+        assert_eq!(settings.wifi_chunk_size_mb, 16);
+        assert_eq!(settings.wifi_upload_concurrency, 2);
+    }
+
+    #[test]
+    fn app_settings_uses_frontend_wifi_acronym_field_names() {
+        let settings = AppSettings {
+            wifi_max_upload_gb: 10,
+            wifi_chunk_size_mb: 8,
+            wifi_upload_concurrency: 4,
+            ..AppSettings::default()
+        };
+
+        let json = serde_json::to_string(&settings).expect("settings should serialize");
+
+        assert!(json.contains("\"wifiMaxUploadGB\":10"));
+        assert!(json.contains("\"wifiChunkSizeMB\":8"));
+        assert!(json.contains("\"wifiUploadConcurrency\":4"));
     }
 
     #[test]

@@ -108,11 +108,15 @@ pub async fn start_wifi_transfer(
         Some(settings.wifi_upload_dir)
     };
     let max_gb = settings.wifi_max_upload_gb.clamp(1, 50);
+    let chunk_size_mb = settings.wifi_chunk_size_mb.clamp(1, 64);
+    let upload_concurrency = settings.wifi_upload_concurrency.clamp(1, 4);
     crate::services::wifi_transfer::start_server(
         &transfer_service,
         port,
         custom_dir,
         max_gb,
+        chunk_size_mb,
+        upload_concurrency,
         settings.locale,
     )
     .await

@@ -33,6 +33,10 @@
     "wifiUploadDirDesc": "Where received WiFi transfer files are stored",
     "wifiMaxUploadSize": "Max Upload File Size",
     "wifiMaxUploadSizeDesc": "Maximum single file size for WiFi upload",
+    "wifiChunkSize": "Upload Chunk Size",
+    "wifiChunkSizeDesc": "Data size per WiFi upload request. Takes effect next time WiFi service starts",
+    "wifiUploadConcurrency": "Concurrent Upload Requests",
+    "wifiUploadConcurrencyDesc": "Number of queue items uploaded at once, range 1-4. Takes effect next time WiFi service starts",
     "chooseDir": "Choose Directory",
     "resetDefault": "Reset Default"
   },

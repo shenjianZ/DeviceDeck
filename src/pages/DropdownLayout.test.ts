@@ -23,11 +23,11 @@ describe('dropdown layout contexts', () => {
       count(settingsPageSource, 'className="settings-compact-select"') +
       count(settingsPageSource, 'className="settings-config-select"')
 
-    expect(totalDropdowns).toBe(18)
+    expect(totalDropdowns).toBe(21)
     expect(categorizedDropdowns).toBe(totalDropdowns)
     expect(count(logsPageSource, 'className="toolbar-select"')).toBe(2)
     expect(count(mirrorPageSource, 'className="device-select"')).toBe(5)
-    expect(count(settingsPageSource, 'className="settings-compact-select"')).toBe(2)
+    expect(count(settingsPageSource, 'className="settings-compact-select"')).toBe(5)
     expect(count(settingsPageSource, 'className="settings-config-select"')).toBe(9)
   })
 

@@ -74,6 +74,22 @@ const AUDIO_CODEC_OPTIONS = [
   { value: "raw", label: "Raw" },
 ];
 
+const WIFI_CHUNK_SIZE_OPTIONS = [
+  { value: "1", label: "1 MB" },
+  { value: "2", label: "2 MB" },
+  { value: "4", label: "4 MB" },
+  { value: "8", label: "8 MB" },
+  { value: "16", label: "16 MB" },
+  { value: "32", label: "32 MB" },
+];
+
+const WIFI_UPLOAD_CONCURRENCY_OPTIONS = [
+  { value: "1", label: "1" },
+  { value: "2", label: "2" },
+  { value: "3", label: "3" },
+  { value: "4", label: "4" },
+];
+
 export function SettingsPage() {
   const { t, i18n } = useTranslation(["settings", "common", "mirror"]);
   const settings = useSettingsStore((s) => s.settings);
@@ -333,7 +349,7 @@ export function SettingsPage() {
               </div>
               <Dropdown
                 className="settings-compact-select"
-                value={String(settings.wifiMaxUploadGB ?? 2)}
+                value={String(settings.wifiMaxUploadGB ?? 10)}
                 onChange={(v) => updateSetting("wifiMaxUploadGB", parseInt(v, 10))}
                 options={[
                   { value: "1", label: "1 GB" },
@@ -343,6 +359,30 @@ export function SettingsPage() {
                   { value: "20", label: "20 GB" },
                   { value: "50", label: "50 GB" },
                 ]}
+              />
+            </div>
+            <div className="settings-row">
+              <div>
+                <div style={{ fontWeight: 500 }}>{t("settings:tools.wifiChunkSize")}</div>
+                <div className="settings-desc">{t("settings:tools.wifiChunkSizeDesc")}</div>
+              </div>
+              <Dropdown
+                className="settings-compact-select"
+                value={String(settings.wifiChunkSizeMB ?? 16)}
+                onChange={(v) => updateSetting("wifiChunkSizeMB", parseInt(v, 10))}
+                options={WIFI_CHUNK_SIZE_OPTIONS}
+              />
+            </div>
+            <div className="settings-row">
+              <div>
+                <div style={{ fontWeight: 500 }}>{t("settings:tools.wifiUploadConcurrency")}</div>
+                <div className="settings-desc">{t("settings:tools.wifiUploadConcurrencyDesc")}</div>
+              </div>
+              <Dropdown
+                className="settings-compact-select"
+                value={String(settings.wifiUploadConcurrency ?? 2)}
+                onChange={(v) => updateSetting("wifiUploadConcurrency", parseInt(v, 10))}
+                options={WIFI_UPLOAD_CONCURRENCY_OPTIONS}
               />
             </div>
           </section>

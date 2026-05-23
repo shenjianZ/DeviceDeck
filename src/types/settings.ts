@@ -18,6 +18,8 @@ export interface AppSettings {
   firstRun?: boolean;
   wifiUploadDir?: string;
   wifiMaxUploadGB?: number;
+  wifiChunkSizeMB?: number;
+  wifiUploadConcurrency?: number;
 }
 
 export interface ToolStatus {
