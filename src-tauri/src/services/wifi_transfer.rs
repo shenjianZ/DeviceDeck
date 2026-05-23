@@ -1,7 +1,7 @@
-use std::io::{self, Seek, Write};
+use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::net::SocketAddr;
 use std::path::{Path as FsPath, PathBuf};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use axum::{
     body::{Body, Bytes},
@@ -9,7 +9,7 @@ use axum::{
         ws::{Message, WebSocket, WebSocketUpgrade},
         DefaultBodyLimit, Multipart, Path, Query, State,
     },
-    http::{header, HeaderValue, StatusCode},
+    http::{header, HeaderMap, HeaderValue, StatusCode},
     response::{Html, IntoResponse, Json, Response},
     routing::{delete, get, post},
     Router,
@@ -17,7 +17,8 @@ use axum::{
 use base64::Engine;
 use qrcode::QrCode;
 use serde::{Deserialize, Serialize};
-use tokio::io::AsyncWriteExt;
+use sha2::{Digest, Sha256};
+use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use tokio::sync::broadcast;
 use tokio::sync::mpsc;
 use tokio::sync::watch;
@@ -30,6 +31,7 @@ use crate::services::transfer::TransferService;
 
 const DEFAULT_PORT: u16 = 37210;
 const WIFI_EVENT_CHANNEL_SIZE: usize = 256;
+const PARTIAL_UPLOAD_DIR_NAME: &str = ".dd-upload-partials";
 
 static WIFI_EVENT_TX: OnceLock<Mutex<Option<broadcast::Sender<WifiFileEvent>>>> = OnceLock::new();
 
@@ -40,6 +42,7 @@ struct AppState {
     app_handle: tauri::AppHandle,
     locale: String,
     event_tx: broadcast::Sender<WifiFileEvent>,
+    history: Arc<Mutex<Vec<TransferHistoryEntry>>>,
 }
 
 #[derive(Deserialize)]
@@ -50,6 +53,31 @@ struct VerifyQuery {
     client_id: Option<String>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ChunkUploadQuery {
+    token: Option<String>,
+    client_id: Option<String>,
+    upload_id: String,
+    path: String,
+    file_size: u64,
+    offset: u64,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UploadStatusQuery {
+    token: Option<String>,
+    upload_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BatchDownloadQuery {
+    token: Option<String>,
+    paths: String,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct FileInfo {
@@ -57,6 +85,23 @@ struct FileInfo {
     path: String,
     size: u64,
     is_directory: bool,
+    modified: Option<i64>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TransferHistoryEntry {
+    id: String,
+    #[serde(rename = "type")]
+    entry_type: String,
+    name: String,
+    path: String,
+    size: u64,
+    status: String,
+    client_id: Option<String>,
+    checksum: Option<String>,
+    message: Option<String>,
+    timestamp: i64,
 }
 
 #[derive(Clone, Serialize)]
@@ -143,6 +188,7 @@ pub async fn start_server(
     );
 
     let (event_tx, _) = broadcast::channel(WIFI_EVENT_CHANNEL_SIZE);
+    let history = Arc::new(Mutex::new(Vec::new()));
 
     let state = AppState {
         token: token.clone(),
@@ -150,6 +196,7 @@ pub async fn start_server(
         app_handle: transfer_service.app_handle(),
         locale: normalize_locale(&locale).to_string(),
         event_tx: event_tx.clone(),
+        history,
     };
 
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
@@ -158,9 +205,14 @@ pub async fn start_server(
         .route("/", get(serve_mobile_page))
         .route("/api/verify", get(verify_token))
         .route("/api/upload", post(upload_file))
+        .route("/api/upload/chunk", post(upload_chunk))
+        .route("/api/upload/status", get(upload_status))
         .route("/api/files", get(list_files))
         .route("/api/download/{*path}", get(download_file))
+        .route("/api/download-zip", get(download_selected_zip))
+        .route("/api/preview/{*path}", get(preview_file))
         .route("/api/files/{*path}", delete(delete_file))
+        .route("/api/history", get(transfer_history))
         .route("/ws", get(wifi_events))
         .layer(DefaultBodyLimit::max(max_upload_bytes))
         .layer(tower_http::cors::CorsLayer::permissive())
@@ -354,10 +406,228 @@ async fn upload_file(
             .strip_prefix(&state.upload_dir)
             .map(path_to_slash_string)
             .unwrap_or_else(|_| path_to_slash_string(&safe_path));
-        broadcast_wifi_file_event("file.created", Some(event_path), query.client_id.clone());
+        broadcast_wifi_file_event(
+            "file.created",
+            Some(event_path.clone()),
+            query.client_id.clone(),
+        );
+        push_transfer_history(
+            &state,
+            TransferHistoryEntry {
+                id: nanoid::nanoid!(10),
+                entry_type: "upload".to_string(),
+                name: dest
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("unknown")
+                    .to_string(),
+                path: event_path,
+                size: tokio::fs::metadata(&dest)
+                    .await
+                    .map(|m| m.len())
+                    .unwrap_or(0),
+                status: "completed".to_string(),
+                client_id: query.client_id.clone(),
+                checksum: None,
+                message: Some("multipart".to_string()),
+                timestamp: chrono::Utc::now().timestamp_millis(),
+            },
+        );
     }
 
     (StatusCode::OK, Json(serde_json::json!({ "ok": true })))
+}
+
+async fn upload_status(
+    State(state): State<AppState>,
+    Query(query): Query<UploadStatusQuery>,
+) -> impl IntoResponse {
+    if query.token.as_deref() != Some(&state.token) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({ "error": "Invalid token" })),
+        );
+    }
+
+    let partial = partial_upload_path(&state.upload_dir, &query.upload_id);
+    let uploaded_bytes = tokio::fs::metadata(partial)
+        .await
+        .map(|metadata| metadata.len())
+        .unwrap_or(0);
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({ "uploadedBytes": uploaded_bytes })),
+    )
+}
+
+async fn upload_chunk(
+    State(state): State<AppState>,
+    Query(query): Query<ChunkUploadQuery>,
+    body: Bytes,
+) -> impl IntoResponse {
+    if query.token.as_deref() != Some(&state.token) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({ "error": "Invalid token" })),
+        );
+    }
+    if has_parent_path_segment(&query.path) || query.offset > query.file_size {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": "Invalid upload" })),
+        );
+    }
+
+    let chunk_len = body.len() as u64;
+    if query.offset.saturating_add(chunk_len) > query.file_size {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": "Chunk exceeds declared size" })),
+        );
+    }
+
+    let partial = partial_upload_path(&state.upload_dir, &query.upload_id);
+    if let Some(parent) = partial.parent() {
+        if let Err(e) = tokio::fs::create_dir_all(parent).await {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": e.to_string() })),
+            );
+        }
+    }
+
+    let mut file = match tokio::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .read(true)
+        .open(&partial)
+        .await
+    {
+        Ok(file) => file,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": e.to_string() })),
+            )
+        }
+    };
+
+    if let Err(e) = file.seek(SeekFrom::Start(query.offset)).await {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        );
+    }
+    if let Err(e) = file.write_all(&body).await {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        );
+    }
+    if let Err(e) = file.flush().await {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        );
+    }
+    drop(file);
+
+    let uploaded_bytes = tokio::fs::metadata(&partial)
+        .await
+        .map(|metadata| metadata.len())
+        .unwrap_or(0)
+        .min(query.file_size);
+
+    if uploaded_bytes < query.file_size {
+        return (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "ok": true,
+                "completed": false,
+                "uploadedBytes": uploaded_bytes
+            })),
+        );
+    }
+
+    let safe_path = sanitize_relative_path(&query.path);
+    let dest = unique_upload_path(&state.upload_dir, &safe_path).await;
+    if let Some(parent) = dest.parent() {
+        if let Err(e) = tokio::fs::create_dir_all(parent).await {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": e.to_string() })),
+            );
+        }
+    }
+
+    if let Err(e) = tokio::fs::rename(&partial, &dest).await {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        );
+    }
+
+    let metadata = match tokio::fs::metadata(&dest).await {
+        Ok(metadata) => metadata,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": e.to_string() })),
+            )
+        }
+    };
+    if metadata.len() != query.file_size {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": "Size verification failed" })),
+        );
+    }
+
+    let checksum = hash_file_sha256(dest.clone()).await.ok();
+    let _ = tauri::Emitter::emit(
+        &state.app_handle,
+        "transfer://file-received",
+        dest.to_string_lossy().into_owned(),
+    );
+    let event_path = dest
+        .strip_prefix(&state.upload_dir)
+        .map(path_to_slash_string)
+        .unwrap_or_else(|_| path_to_slash_string(&safe_path));
+    broadcast_wifi_file_event(
+        "file.created",
+        Some(event_path.clone()),
+        query.client_id.clone(),
+    );
+    push_transfer_history(
+        &state,
+        TransferHistoryEntry {
+            id: nanoid::nanoid!(10),
+            entry_type: "upload".to_string(),
+            name: dest
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("unknown")
+                .to_string(),
+            path: event_path.clone(),
+            size: metadata.len(),
+            status: "completed".to_string(),
+            client_id: query.client_id.clone(),
+            checksum: checksum.clone(),
+            message: Some("chunked+size-verified".to_string()),
+            timestamp: chrono::Utc::now().timestamp_millis(),
+        },
+    );
+
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "ok": true,
+            "completed": true,
+            "uploadedBytes": metadata.len(),
+            "path": event_path,
+            "checksum": checksum
+        })),
+    )
 }
 
 fn format_access_url(ip: std::net::IpAddr, port: u16) -> String {
@@ -412,6 +682,128 @@ async fn write_multipart_field(
     Ok(())
 }
 
+fn partial_upload_path(upload_dir: &FsPath, upload_id: &str) -> PathBuf {
+    upload_dir
+        .join(PARTIAL_UPLOAD_DIR_NAME)
+        .join(format!("{}.part", sanitize_filename(upload_id)))
+}
+
+async fn file_response(
+    file_path: &FsPath,
+    display_name: &str,
+    file_size: u64,
+    disposition_type: &str,
+    content_type: &'static str,
+    range: Option<&HeaderValue>,
+) -> Result<Response, io::Error> {
+    let mut file = tokio::fs::File::open(file_path).await?;
+    let range = range.and_then(|value| value.to_str().ok());
+    let parsed_range = range.and_then(|value| parse_range_header(value, file_size));
+    let (status, start, end) = match parsed_range {
+        Some((start, end)) => (StatusCode::PARTIAL_CONTENT, start, end),
+        None => (StatusCode::OK, 0, file_size.saturating_sub(1)),
+    };
+    let content_len = if file_size == 0 { 0 } else { end - start + 1 };
+    if start > 0 {
+        file.seek(SeekFrom::Start(start)).await?;
+    }
+
+    let body = if content_len == 0 {
+        Body::empty()
+    } else {
+        Body::from_stream(ReaderStream::new(file.take(content_len)))
+    };
+    let disposition = format!(
+        "{disposition_type}; filename*=UTF-8''{}",
+        percent_encode_header_value(display_name)
+    );
+    let mut response = Response::new(body);
+    *response.status_mut() = status;
+    response
+        .headers_mut()
+        .insert(header::CONTENT_TYPE, HeaderValue::from_static(content_type));
+    response
+        .headers_mut()
+        .insert(header::ACCEPT_RANGES, HeaderValue::from_static("bytes"));
+    if let Ok(value) = HeaderValue::from_str(&content_len.to_string()) {
+        response.headers_mut().insert(header::CONTENT_LENGTH, value);
+    }
+    if status == StatusCode::PARTIAL_CONTENT {
+        let value = format!("bytes {start}-{end}/{file_size}");
+        if let Ok(value) = HeaderValue::from_str(&value) {
+            response.headers_mut().insert(header::CONTENT_RANGE, value);
+        }
+    }
+    if let Ok(value) = HeaderValue::from_str(&disposition) {
+        response
+            .headers_mut()
+            .insert(header::CONTENT_DISPOSITION, value);
+    }
+    Ok(response)
+}
+
+fn parse_range_header(value: &str, file_size: u64) -> Option<(u64, u64)> {
+    if file_size == 0 {
+        return None;
+    }
+    let range = value.strip_prefix("bytes=")?;
+    let (start, end) = range.split_once('-')?;
+    if start.is_empty() {
+        let suffix = end.parse::<u64>().ok()?.min(file_size);
+        return Some((file_size - suffix, file_size - 1));
+    }
+    let start = start.parse::<u64>().ok()?;
+    if start >= file_size {
+        return None;
+    }
+    let end = if end.is_empty() {
+        file_size - 1
+    } else {
+        end.parse::<u64>().ok()?.min(file_size - 1)
+    };
+    if end < start {
+        return None;
+    }
+    Some((start, end))
+}
+
+async fn hash_file_sha256(path: PathBuf) -> Result<String, io::Error> {
+    tokio::task::spawn_blocking(move || {
+        let mut file = std::fs::File::open(path)?;
+        let mut hasher = Sha256::new();
+        let mut buffer = [0u8; 64 * 1024];
+        loop {
+            let read = file.read(&mut buffer)?;
+            if read == 0 {
+                break;
+            }
+            hasher.update(&buffer[..read]);
+        }
+        Ok::<_, io::Error>(format!("{:x}", hasher.finalize()))
+    })
+    .await
+    .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?
+}
+
+fn push_transfer_history(state: &AppState, entry: TransferHistoryEntry) {
+    if let Ok(mut history) = state.history.lock() {
+        history.insert(0, entry);
+        history.truncate(100);
+    }
+}
+
+fn parse_batch_paths(paths: &str) -> Vec<String> {
+    if let Ok(values) = serde_json::from_str::<Vec<String>>(paths) {
+        return values;
+    }
+    paths
+        .split(',')
+        .map(str::trim)
+        .filter(|path| !path.is_empty())
+        .map(ToString::to_string)
+        .collect()
+}
+
 async fn list_files(
     State(state): State<AppState>,
     Query(query): Query<VerifyQuery>,
@@ -430,6 +822,9 @@ async fn list_files(
         while let Ok(Some(entry)) = entries.next_entry().await {
             if let Ok(metadata) = entry.metadata().await {
                 if let Some(name) = entry.file_name().to_str() {
+                    if name == PARTIAL_UPLOAD_DIR_NAME {
+                        continue;
+                    }
                     let path = append_relative_name(&relative, name);
                     files.push(FileInfo {
                         name: name.to_string(),
@@ -440,6 +835,11 @@ async fn list_files(
                             0
                         },
                         is_directory: metadata.is_dir(),
+                        modified: metadata
+                            .modified()
+                            .ok()
+                            .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+                            .map(|duration| duration.as_millis() as i64),
                     });
                 }
             }
@@ -458,6 +858,7 @@ async fn download_file(
     State(state): State<AppState>,
     Query(query): Query<VerifyQuery>,
     Path(path): Path<String>,
+    headers: HeaderMap,
 ) -> Response {
     if query.token.as_deref() != Some(&state.token) {
         return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
@@ -499,28 +900,145 @@ async fn download_file(
         .and_then(|s| s.to_str())
         .unwrap_or("download");
 
-    match tokio::fs::File::open(&file_path).await {
-        Ok(file) => {
-            let stream = ReaderStream::new(file);
-            let body = Body::from_stream(stream);
-            let disposition = format!(
-                "attachment; filename*=UTF-8''{}",
-                percent_encode_header_value(display_name)
+    match file_response(
+        &file_path,
+        display_name,
+        metadata.len(),
+        "attachment",
+        guess_content_type(display_name),
+        headers.get(header::RANGE),
+    )
+    .await
+    {
+        Ok(response) => {
+            push_transfer_history(
+                &state,
+                TransferHistoryEntry {
+                    id: nanoid::nanoid!(10),
+                    entry_type: "download".to_string(),
+                    name: display_name.to_string(),
+                    path: path_to_slash_string(&relative),
+                    size: metadata.len(),
+                    status: "started".to_string(),
+                    client_id: query.client_id.clone(),
+                    checksum: None,
+                    message: None,
+                    timestamp: chrono::Utc::now().timestamp_millis(),
+                },
             );
-            let mut response = Response::new(body);
-            response.headers_mut().insert(
-                header::CONTENT_TYPE,
-                HeaderValue::from_static(guess_content_type(display_name)),
-            );
-            if let Ok(value) = HeaderValue::from_str(&disposition) {
-                response
-                    .headers_mut()
-                    .insert(header::CONTENT_DISPOSITION, value);
-            }
             response
         }
         Err(_) => (StatusCode::NOT_FOUND, "File not found").into_response(),
     }
+}
+
+async fn preview_file(
+    State(state): State<AppState>,
+    Query(query): Query<VerifyQuery>,
+    Path(path): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    if query.token.as_deref() != Some(&state.token) {
+        return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
+    }
+    if has_parent_path_segment(&path) {
+        return (StatusCode::BAD_REQUEST, "Invalid path").into_response();
+    }
+
+    let relative = sanitize_relative_path(&path);
+    let file_path = state.upload_dir.join(&relative);
+
+    let metadata = match tokio::fs::metadata(&file_path).await {
+        Ok(metadata) => metadata,
+        Err(_) => return (StatusCode::NOT_FOUND, "File not found").into_response(),
+    };
+
+    if metadata.is_dir() {
+        return (StatusCode::BAD_REQUEST, "Directories cannot be previewed").into_response();
+    }
+
+    let display_name = relative
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("preview");
+
+    match file_response(
+        &file_path,
+        display_name,
+        metadata.len(),
+        "inline",
+        preview_content_type(display_name),
+        headers.get(header::RANGE),
+    )
+    .await
+    {
+        Ok(mut response) => {
+            response.headers_mut().insert(
+                "x-content-type-options",
+                HeaderValue::from_static("nosniff"),
+            );
+            response
+        }
+        Err(_) => (StatusCode::NOT_FOUND, "File not found").into_response(),
+    }
+}
+
+async fn download_selected_zip(
+    State(state): State<AppState>,
+    Query(query): Query<BatchDownloadQuery>,
+) -> Response {
+    if query.token.as_deref() != Some(&state.token) {
+        return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
+    }
+
+    let paths = parse_batch_paths(&query.paths);
+    if paths.is_empty() || paths.iter().any(|path| has_parent_path_segment(path)) {
+        return (StatusCode::BAD_REQUEST, "Invalid paths").into_response();
+    }
+    let relatives = paths
+        .iter()
+        .map(|path| sanitize_relative_path(path))
+        .filter(|path| !path.as_os_str().is_empty())
+        .collect::<Vec<_>>();
+    if relatives.is_empty() {
+        return (StatusCode::BAD_REQUEST, "Invalid paths").into_response();
+    }
+
+    let stream = build_selected_zip_archive_stream(&state.upload_dir, relatives);
+    let disposition = format!(
+        "attachment; filename*=UTF-8''{}",
+        percent_encode_header_value("devicedeck-files.zip")
+    );
+    let mut response = Response::new(Body::from_stream(stream));
+    response.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/zip"),
+    );
+    if let Ok(value) = HeaderValue::from_str(&disposition) {
+        response
+            .headers_mut()
+            .insert(header::CONTENT_DISPOSITION, value);
+    }
+    response
+}
+
+async fn transfer_history(
+    State(state): State<AppState>,
+    Query(query): Query<VerifyQuery>,
+) -> impl IntoResponse {
+    if query.token.as_deref() != Some(&state.token) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(Vec::<TransferHistoryEntry>::new()),
+        );
+    }
+
+    let entries = state
+        .history
+        .lock()
+        .map(|history| history.clone())
+        .unwrap_or_default();
+    (StatusCode::OK, Json(entries))
 }
 
 async fn delete_file(
@@ -649,6 +1167,23 @@ fn build_zip_archive_stream(
     ReceiverStream::new(receiver)
 }
 
+fn build_selected_zip_archive_stream(
+    upload_dir: &FsPath,
+    relatives: Vec<PathBuf>,
+) -> ReceiverStream<Result<Bytes, io::Error>> {
+    let (sender, receiver) = mpsc::channel::<Result<Bytes, io::Error>>(8);
+    let upload_dir = upload_dir.to_path_buf();
+    tokio::task::spawn_blocking(move || {
+        let error_sender = sender.clone();
+        if let Err(e) =
+            build_selected_zip_archive_sync(&upload_dir, &relatives, ChannelWriter { sender })
+        {
+            let _ = error_sender.blocking_send(Err(io::Error::new(io::ErrorKind::Other, e)));
+        }
+    });
+    ReceiverStream::new(receiver)
+}
+
 struct ChannelWriter {
     sender: mpsc::Sender<Result<Bytes, io::Error>>,
 }
@@ -689,6 +1224,39 @@ where
         zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
 
     add_zip_directory(&mut zip, &source_dir, &root_name, options)?;
+    zip.finish().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn build_selected_zip_archive_sync<W>(
+    upload_dir: &FsPath,
+    relatives: &[PathBuf],
+    writer: W,
+) -> Result<(), String>
+where
+    W: Write,
+{
+    let mut zip = zip::ZipWriter::new_stream(writer);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+
+    for relative in relatives {
+        let source = upload_dir.join(relative);
+        let metadata = match std::fs::metadata(&source) {
+            Ok(metadata) => metadata,
+            Err(_) => continue,
+        };
+        let zip_name = path_to_slash_string(relative);
+        if metadata.is_dir() {
+            add_zip_directory(&mut zip, &source, &zip_name, options)?;
+        } else if metadata.is_file() {
+            zip.start_file(&zip_name, options)
+                .map_err(|e| e.to_string())?;
+            let mut file = std::fs::File::open(&source).map_err(|e| e.to_string())?;
+            std::io::copy(&mut file, &mut zip).map_err(|e| e.to_string())?;
+        }
+    }
+
     zip.finish().map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -749,17 +1317,48 @@ fn percent_encode_header_value(value: &str) -> String {
 }
 
 fn guess_content_type(name: &str) -> &'static str {
-    match name.rsplit('.').next().unwrap_or("") {
+    match file_extension(name).as_str() {
         "jpg" | "jpeg" => "image/jpeg",
         "png" => "image/png",
         "gif" => "image/gif",
+        "webp" => "image/webp",
+        "bmp" => "image/bmp",
+        "ico" => "image/x-icon",
+        "avif" => "image/avif",
         "pdf" => "application/pdf",
         "zip" => "application/zip",
+        "rar" => "application/vnd.rar",
+        "7z" => "application/x-7z-compressed",
+        "tar" => "application/x-tar",
+        "gz" => "application/gzip",
         "apk" => "application/vnd.android.package-archive",
         "mp4" => "video/mp4",
+        "webm" => "video/webm",
+        "mov" => "video/quicktime",
+        "m4v" => "video/x-m4v",
         "mp3" => "audio/mpeg",
+        "wav" => "audio/wav",
+        "ogg" => "audio/ogg",
+        "m4a" => "audio/mp4",
+        "flac" => "audio/flac",
+        "txt" | "log" | "md" | "csv" | "json" | "jsonl" | "js" | "ts" | "jsx" | "tsx" | "css"
+        | "html" | "htm" | "xml" | "svg" | "yaml" | "yml" | "toml" | "rs" | "py" | "go"
+        | "java" | "c" | "cpp" | "h" | "hpp" | "sh" | "bat" | "ps1" | "sql" => {
+            "text/plain; charset=utf-8"
+        }
         _ => "application/octet-stream",
     }
+}
+
+fn preview_content_type(name: &str) -> &'static str {
+    match file_extension(name).as_str() {
+        "html" | "htm" | "svg" => "text/plain; charset=utf-8",
+        _ => guess_content_type(name),
+    }
+}
+
+fn file_extension(name: &str) -> String {
+    name.rsplit('.').next().unwrap_or("").to_ascii_lowercase()
 }
 
 const MOBILE_HTML: &str = r##"
@@ -971,6 +1570,14 @@ html[data-theme="light"] .theme-icon-moon{display:block}
   -webkit-user-select:none;user-select:none;
 }
 .upload-action-btn:hover{border-color:var(--border-hover);color:var(--fg)}
+.upload-action-btn.unsupported{
+  opacity:.55;
+  cursor:not-allowed;
+}
+.upload-action-btn.unsupported:hover{
+  border-color:var(--border);
+  color:var(--fg-2);
+}
 .upload-action-btn svg{width:16px;height:16px}
 
 .queue-section{
@@ -1116,6 +1723,50 @@ html[data-theme="light"] .theme-icon-moon{display:block}
 .files-refresh svg{width:16px;height:16px}
 @keyframes spin{to{transform:rotate(360deg)}}
 
+.files-tools{
+  padding:12px;border-bottom:1px solid var(--border);
+  display:grid;grid-template-columns:minmax(0,1fr) 132px 122px;gap:8px;
+  background:var(--surface);
+}
+.files-search,.files-select{
+  width:100%;height:36px;border:1px solid var(--border);border-radius:var(--r-xs);
+  background:var(--surface-2);color:var(--fg);font-size:12px;font-weight:500;
+  outline:none;min-width:0;transition:border-color .15s,background .15s,color .15s;
+}
+.files-search{padding:0 12px}
+.files-select{
+  appearance:none;-webkit-appearance:none;
+  padding:0 32px 0 12px;cursor:pointer;
+  background-image:
+    linear-gradient(45deg,transparent 50%,var(--fg-3) 50%),
+    linear-gradient(135deg,var(--fg-3) 50%,transparent 50%);
+  background-position:
+    calc(100% - 16px) 15px,
+    calc(100% - 11px) 15px;
+  background-size:5px 5px,5px 5px;
+  background-repeat:no-repeat;
+}
+.files-search::placeholder{color:var(--fg-3)}
+.files-search:focus,.files-select:focus{
+  border-color:var(--accent-border);
+  background-color:var(--surface-3);
+  color:var(--fg);
+}
+.files-select:hover,.files-search:hover{border-color:var(--border-hover)}
+.files-bulk{
+  padding:8px 12px;border-bottom:1px solid var(--border);
+  display:none;align-items:center;justify-content:space-between;gap:8px;
+  font-size:12px;color:var(--fg-2);
+}
+.files-bulk.show{display:flex}
+.files-bulk-actions{display:flex;gap:6px;flex-shrink:0}
+.mini-action{
+  border:1px solid var(--border);border-radius:var(--r-xs);
+  background:var(--surface-2);color:var(--fg-2);height:30px;padding:0 10px;
+  font-size:12px;cursor:pointer;
+}
+.mini-action:hover{color:var(--fg);border-color:var(--border-hover)}
+.mini-action.danger{color:var(--danger)}
 .files-list{max-height:50vh;overflow-y:auto}
 
 .file-item{
@@ -1125,6 +1776,9 @@ html[data-theme="light"] .theme-icon-moon{display:block}
 }
 .file-item:last-child{border-bottom:none}
 .file-item:active{background:var(--surface-2)}
+.file-check{
+  width:18px;height:18px;accent-color:var(--accent);flex-shrink:0;
+}
 
 .file-icon{
   width:36px;height:36px;border-radius:var(--r-xs);
@@ -1181,6 +1835,31 @@ html[data-theme="light"] .theme-icon-moon{display:block}
 .files-clear-all:hover{opacity:.8}
 .files-clear-all svg{width:14px;height:14px}
 
+.history-section{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r);overflow:hidden;
+}
+.history-header{
+  padding:14px 16px;display:flex;align-items:center;justify-content:space-between;
+  border-bottom:1px solid var(--border);
+}
+.history-title{font-size:14px;font-weight:600}
+.history-list{max-height:220px;overflow-y:auto}
+.history-item{
+  padding:10px 16px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:10px;
+}
+.history-item:last-child{border-bottom:none}
+.history-info{flex:1;min-width:0}
+.history-name{font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.history-meta{font-size:11px;color:var(--fg-3);margin-top:2px}
+.history-badge{
+  font-size:11px;font-weight:600;padding:2px 6px;border-radius:4px;
+  background:var(--surface-3);color:var(--fg-2);flex-shrink:0;
+}
+.history-badge.upload{color:var(--accent);background:var(--accent-soft)}
+.history-badge.download{color:#38bdf8;background:rgba(56,189,248,0.1)}
+
 .empty-state{padding:40px 20px;text-align:center}
 .empty-state svg{width:40px;height:40px;color:var(--fg-3);margin-bottom:12px;opacity:.5}
 .empty-state p{font-size:13px;color:var(--fg-3)}
@@ -1231,6 +1910,64 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
 .modal-btn.danger{background:var(--danger);color:#fff}
 .modal-btn.danger:hover{opacity:.9}
 
+.preview-overlay{
+  position:fixed;inset:0;z-index:220;
+  background:rgba(0,0,0,.72);
+  display:flex;align-items:flex-end;justify-content:center;
+  opacity:0;pointer-events:none;
+  transition:opacity .2s;
+}
+.preview-overlay.show{opacity:1;pointer-events:auto}
+.preview-panel{
+  width:100%;max-width:840px;height:min(86vh,720px);
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:18px 18px 0 0;
+  box-shadow:0 -16px 48px var(--shadow);
+  display:flex;flex-direction:column;overflow:hidden;
+  transform:translateY(24px);transition:transform .2s;
+}
+.preview-overlay.show .preview-panel{transform:translateY(0)}
+.preview-header{
+  padding:12px 14px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:10px;min-height:64px;
+}
+.preview-info{flex:1;min-width:0}
+.preview-name{
+  font-size:14px;font-weight:600;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.preview-meta{
+  margin-top:2px;font-size:11px;color:var(--fg-3);
+  font-family:'SF Mono',SFMono-Regular,ui-monospace,Menlo,monospace;
+}
+.preview-actions{display:flex;align-items:center;gap:4px;flex-shrink:0}
+.preview-body{
+  flex:1;min-height:0;background:var(--bg);
+  display:flex;align-items:center;justify-content:center;
+  overflow:auto;
+}
+.preview-media{
+  max-width:100%;max-height:100%;
+  display:block;
+}
+.preview-video{width:100%;height:100%;background:#000}
+.preview-audio{width:min(520px,calc(100% - 32px))}
+.preview-frame{width:100%;height:100%;border:0;background:#fff}
+.preview-text{
+  align-self:stretch;width:100%;min-height:100%;
+  padding:16px;margin:0;overflow:auto;
+  color:var(--fg);background:var(--bg);
+  font:12px/1.6 'SF Mono',SFMono-Regular,ui-monospace,Menlo,monospace;
+  white-space:pre-wrap;word-break:break-word;
+}
+.preview-state{
+  padding:24px;text-align:center;color:var(--fg-3);
+  font-size:13px;line-height:1.6;
+}
+.preview-state svg{
+  width:36px;height:36px;margin-bottom:10px;color:var(--fg-3);opacity:.65;
+}
+
 .auth-btn:not(:disabled):active,
 .upload-action-btn:active,
 .upload-all-btn:not(:disabled):active,
@@ -1239,6 +1976,7 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
 .files-download-all:active,
 .files-clear-all:active,
 .files-refresh:active,
+.preview-actions .icon-btn:active,
 .modal-btn:active {
   transform:scale(.92);
 }
@@ -1266,9 +2004,15 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
   .upload-zone{padding:48px 32px}
   .queue-list{max-height:480px}
   .files-list{max-height:60vh}
+  .preview-overlay{align-items:center;padding:24px}
+  .preview-panel{border-radius:var(--r);height:min(82vh,760px)}
 }
 @media(min-width:1024px){
   .content{max-width:720px;padding:32px 40px}
+}
+@media(max-width:520px){
+  .files-tools{grid-template-columns:1fr 1fr;gap:8px}
+  .files-search{grid-column:1 / -1}
 }
 </style>
 </head>
@@ -1385,12 +2129,50 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
         </div>
       </div>
       <div id="files-list-wrap">
+        <div class="files-tools">
+          <input class="files-search" id="files-search" type="search" placeholder="搜索文件">
+          <select class="files-select" id="files-type-filter">
+            <option value="all">全部类型</option>
+            <option value="img">图片</option>
+            <option value="video">视频</option>
+            <option value="audio">音频</option>
+            <option value="doc">文档</option>
+            <option value="archive">压缩包</option>
+            <option value="code">代码</option>
+          </select>
+          <select class="files-select" id="files-sort">
+            <option value="name-asc">名称 A-Z</option>
+            <option value="name-desc">名称 Z-A</option>
+            <option value="size-desc">大小降序</option>
+            <option value="size-asc">大小升序</option>
+            <option value="time-desc">最新优先</option>
+            <option value="time-asc">最早优先</option>
+          </select>
+        </div>
+        <div class="files-bulk" id="files-bulk">
+          <span id="files-bulk-count">已选择 0 个</span>
+          <div class="files-bulk-actions">
+            <button class="mini-action" id="files-select-all" type="button">全选</button>
+            <button class="mini-action" id="files-bulk-download" type="button">下载</button>
+            <button class="mini-action danger" id="files-bulk-delete" type="button">删除</button>
+          </div>
+        </div>
         <div class="files-list" id="files-list"></div>
         <div class="empty-state" id="files-empty">
           <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
           <p>暂无文件</p>
         </div>
       </div>
+    </div>
+
+    <div class="history-section">
+      <div class="history-header">
+        <div class="history-title">传输历史</div>
+        <button class="files-refresh" id="history-refresh" title="刷新">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        </button>
+      </div>
+      <div class="history-list" id="history-list"></div>
     </div>
   </div>
 </div>
@@ -1406,6 +2188,26 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
   </div>
 </div>
 
+<div class="preview-overlay" id="preview-overlay">
+  <div class="preview-panel" role="dialog" aria-modal="true" aria-labelledby="preview-title">
+    <div class="preview-header">
+      <div class="preview-info">
+        <div class="preview-name" id="preview-title">预览</div>
+        <div class="preview-meta" id="preview-meta"></div>
+      </div>
+      <div class="preview-actions">
+        <button class="icon-btn" id="preview-download" title="下载">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </button>
+        <button class="icon-btn" id="preview-close" title="关闭预览">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="preview-body" id="preview-body"></div>
+  </div>
+</div>
+
 <div id="toast" class="toast"></div>
 
 <script>
@@ -1414,6 +2216,8 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
 
   const $ = s => document.querySelector(s);
   const MAX_FILE_SIZE = 2147483648;
+  const TEXT_PREVIEW_LIMIT = 2097152;
+  const CHUNK_SIZE = 1024 * 1024;
 
   let token = '';
   let queue = [];
@@ -1424,6 +2228,9 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
   let reconnectTimer = null;
   let eventsSocket = null;
   let eventsReconnectTimer = null;
+  let currentPreview = null;
+  let previewRequestId = 0;
+  const selectedFilePaths = new Set();
 
   const authScreen = $('#auth');
   const mainScreen = $('#main');
@@ -1447,6 +2254,16 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
   const filesRefresh = $('#files-refresh');
   const filesDownloadAll = $('#files-download-all');
   const filesClearAll = $('#files-clear-all');
+  const filesSearch = $('#files-search');
+  const filesTypeFilter = $('#files-type-filter');
+  const filesSort = $('#files-sort');
+  const filesBulk = $('#files-bulk');
+  const filesBulkCount = $('#files-bulk-count');
+  const filesSelectAll = $('#files-select-all');
+  const filesBulkDownload = $('#files-bulk-download');
+  const filesBulkDelete = $('#files-bulk-delete');
+  const historyList = $('#history-list');
+  const historyRefresh = $('#history-refresh');
   const refreshBtn = $('#refresh-btn');
   const disconnectBtn = $('#disconnect-btn');
   const toastEl = $('#toast');
@@ -1458,6 +2275,12 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
   const modalConfirm = $('#modal-confirm');
   const themeBtn = $('#theme-btn');
   const authThemeBtn = $('#auth-theme-btn');
+  const previewOverlay = $('#preview-overlay');
+  const previewTitle = $('#preview-title');
+  const previewMeta = $('#preview-meta');
+  const previewBody = $('#preview-body');
+  const previewClose = $('#preview-close');
+  const previewDownload = $('#preview-download');
 
   const initialLocale = '__DD_LOCALE__';
   const locale = initialLocale === 'en' ? 'en' : 'zh-CN';
@@ -1523,7 +2346,24 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
       folder: '文件夹',
       loading: '加载中…',
       toggleFolder: '展开/收起文件夹',
-      folderDropUnsupported: '当前浏览器不支持拖拽目录，请使用“选择文件夹”'
+      folderDropUnsupported: '当前浏览器不支持拖拽目录，请使用“选择文件夹”',
+      folderPickerUnsupported: '当前浏览器不支持选择文件夹，请选择多个文件或在桌面端使用',
+      folderPathUnavailable: '当前浏览器没有提供文件夹路径，已按普通文件加入队列',
+      preview: '预览',
+      closePreview: '关闭预览',
+      previewLoading: '正在加载预览…',
+      previewFailed: '预览加载失败',
+      unsupportedPreview: '此文件类型暂不支持预览',
+      fileTooLargePreview: '文本文件超过 2MB，无法在浏览器内预览',
+      searchFiles: '搜索文件',
+      allTypes: '全部类型',
+      selectedCount: '已选择 ',
+      selectedSuffix: ' 个',
+      selectAll: '全选',
+      history: '传输历史',
+      eta: '剩余 ',
+      verified: '已校验',
+      folderStructureHint: '支持时会保留文件夹结构；不支持时按普通文件上传。'
     },
     en: {
       pageTitle: 'DeviceDeck File Transfer',
@@ -1585,7 +2425,24 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
       folder: 'Folder',
       loading: 'Loading…',
       toggleFolder: 'Expand or collapse folder',
-      folderDropUnsupported: 'This browser does not support folder drag-and-drop. Use Choose folder instead.'
+      folderDropUnsupported: 'This browser does not support folder drag-and-drop. Use Choose folder instead.',
+      folderPickerUnsupported: 'This browser cannot choose folders. Select multiple files or use desktop web.',
+      folderPathUnavailable: 'This browser did not provide folder paths. Files were queued flat.',
+      preview: 'Preview',
+      closePreview: 'Close preview',
+      previewLoading: 'Loading preview…',
+      previewFailed: 'Failed to load preview',
+      unsupportedPreview: 'Preview is not available for this file type',
+      fileTooLargePreview: 'Text files over 2MB cannot be previewed in the browser',
+      searchFiles: 'Search files',
+      allTypes: 'All types',
+      selectedCount: 'Selected ',
+      selectedSuffix: '',
+      selectAll: 'Select all',
+      history: 'Transfer history',
+      eta: 'ETA ',
+      verified: 'Verified',
+      folderStructureHint: 'Folder structure is preserved when the browser provides paths.'
     }
   };
   const text = messages[locale];
@@ -1621,6 +2478,7 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
     setTitle(disconnectBtn, 'disconnectTitle');
     setTitle(themeBtn, 'themeTitle');
     setTitle(authThemeBtn, 'themeTitle');
+    setTitle(pickFolderBtn, supportsFolderPicker() ? 'pickFolder' : 'folderPickerUnsupported');
     offlineBar.textContent = t('offlineText');
     setText('.upload-zone-title', 'uploadTitle');
     setText('.upload-zone-sub', 'uploadSub');
@@ -1636,12 +2494,22 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
     filesCount.textContent = '0';
     filesClearAll.lastChild.textContent = t('clearAll');
     filesDownloadAll.lastChild.textContent = t('downloadAll');
+    filesSearch.placeholder = t('searchFiles');
+    filesTypeFilter.options[0].textContent = t('allTypes');
+    filesSelectAll.textContent = t('selectAll');
+    filesBulkDownload.textContent = t('download');
+    filesBulkDelete.textContent = t('delete');
+    setText('.history-title', 'history');
     setTitle(filesRefresh, 'refresh');
+    setTitle(historyRefresh, 'refresh');
     setText('#files-empty p', 'noFiles');
     setText('.modal-title', 'modalTitle');
     setText('.modal-text', 'modalText');
     modalCancel.textContent = t('cancel');
     modalConfirm.textContent = t('disconnect');
+    previewTitle.textContent = t('preview');
+    setTitle(previewClose, 'closePreview');
+    setTitle(previewDownload, 'download');
   }
 
   function setTheme(theme) {
@@ -1655,6 +2523,7 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
   }
 
   applyLocale();
+  updateFolderPickerAvailability();
   themeBtn.addEventListener('click', toggleTheme);
   authThemeBtn.addEventListener('click', toggleTheme);
 
@@ -1727,6 +2596,7 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
   });
 
   function doDisconnect() {
+    closePreview();
     queue.forEach(q => {
       if (q.xhr) { try { q.xhr.abort(); } catch {} }
     });
@@ -1900,6 +2770,11 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
   pickFolderBtn.addEventListener('click', e => {
     e.preventDefault();
     e.stopPropagation();
+    if (!supportsFolderPicker()) {
+      showToast('warning', t('folderPickerUnsupported'));
+      return;
+    }
+    showToast('info', t('folderStructureHint'));
     folderInput.click();
   });
   uploadZone.addEventListener('click', e => {
@@ -1908,7 +2783,29 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
   });
 
   fileInput.addEventListener('change', e => { addToQueue(e.target.files); fileInput.value = ''; });
-  folderInput.addEventListener('change', e => { addToQueue(e.target.files); folderInput.value = ''; });
+  folderInput.addEventListener('change', e => handleFolderInputChange(e));
+
+  function supportsFolderPicker() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    return 'webkitdirectory' in input;
+  }
+
+  function updateFolderPickerAvailability() {
+    const supported = supportsFolderPicker();
+    pickFolderBtn.classList.toggle('unsupported', !supported);
+    pickFolderBtn.setAttribute('aria-disabled', String(!supported));
+    pickFolderBtn.title = supported ? t('pickFolder') : t('folderPickerUnsupported');
+  }
+
+  function handleFolderInputChange(event) {
+    const files = Array.from(event.target.files || []);
+    if (files.length > 0 && !files.some(file => file.webkitRelativePath)) {
+      showToast('warning', t('folderPathUnavailable'));
+    }
+    addToQueue(files);
+    folderInput.value = '';
+  }
 
   uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
   uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
@@ -2164,7 +3061,7 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
     }[item.status];
 
     const iconHTML = '<div class="queue-item-icon">' + fileIconSVG(item.file.name, type) + '</div>';
-    const metaHTML = '<span>' + formatSize(item.file.size) + '</span>' +
+    const metaHTML = '<span class="queue-speed">' + formatUploadMeta(item) + '</span>' +
       '<span class="queue-item-status ' + item.status + '">' + statusLabel + '</span>';
     const progressHTML = item.status === 'uploading'
       ? '<div class="queue-progress"><div class="queue-progress-bar" style="width:' + item.progress + '%"></div></div>'
@@ -2364,47 +3261,101 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
     }
   }
 
-  function uploadSingle(item) {
-    return new Promise((resolve, reject) => {
-      const fd = new FormData();
-      fd.append('relativePath', item.path || item.file.name);
-      fd.append('files', item.file, item.file.name);
-      const xhr = new XMLHttpRequest();
-      item.xhr = xhr;
-      const params = new URLSearchParams({ token, clientId });
-      xhr.open('POST', '/api/upload?' + params.toString());
+  async function uploadSingle(item) {
+    item.uploadId = item.uploadId || uploadIdFor(item);
+    const statusParams = new URLSearchParams({ token, uploadId: item.uploadId });
+    let uploaded = 0;
+    try {
+      const status = await fetch('/api/upload/status?' + statusParams.toString());
+      if (status.ok) {
+        const data = await status.json();
+        uploaded = Math.min(Number(data.uploadedBytes) || 0, item.file.size);
+      }
+    } catch {}
 
-      xhr.upload.addEventListener('progress', e => {
-        if (e.lengthComputable && item.status === 'uploading') {
-          item.progress = Math.round((e.loaded / e.total) * 100);
-          const el = queueList.querySelector('[data-qid="' + item.id + '"]');
-          if (el) {
-            const bar = el.querySelector('.queue-progress-bar');
-            if (bar) bar.style.width = item.progress + '%';
-            const statusEl = el.querySelector('.queue-item-status');
-            if (statusEl) statusEl.textContent = item.progress + '%';
-          }
-        }
+    item.uploadedBytes = uploaded;
+    item.progress = item.file.size > 0 ? Math.round(uploaded / item.file.size * 100) : 0;
+    item.startedAt = Date.now();
+    item.speed = 0;
+    item.eta = '';
+    updateQueueProgress(item);
+
+    while (uploaded < item.file.size) {
+      if (item.status !== 'uploading') throw new Error('paused');
+      const end = Math.min(uploaded + CHUNK_SIZE, item.file.size);
+      const controller = new AbortController();
+      item.xhr = controller;
+      const params = new URLSearchParams({
+        token,
+        clientId,
+        uploadId: item.uploadId,
+        path: item.path || item.file.name,
+        fileSize: String(item.file.size),
+        offset: String(uploaded)
       });
-
-      xhr.addEventListener('load', () => {
-        item.xhr = null;
-        if (xhr.status >= 200 && xhr.status < 300) resolve();
-        else reject(new Error('Upload failed: ' + xhr.status));
+      const response = await fetch('/api/upload/chunk?' + params.toString(), {
+        method: 'POST',
+        body: item.file.slice(uploaded, end),
+        signal: controller.signal
       });
+      item.xhr = null;
+      if (!response.ok) throw new Error('Upload failed: ' + response.status);
+      const data = await response.json();
+      uploaded = Math.min(Number(data.uploadedBytes) || end, item.file.size);
+      item.uploadedBytes = uploaded;
+      item.progress = item.file.size > 0 ? Math.round(uploaded / item.file.size * 100) : 100;
+      const elapsed = Math.max(1, (Date.now() - item.startedAt) / 1000);
+      item.speed = uploaded / elapsed;
+      item.eta = item.speed > 0 && uploaded < item.file.size ? formatDuration((item.file.size - uploaded) / item.speed) : '';
+      if (data.completed) {
+        item.checksum = data.checksum || '';
+        item.verified = true;
+      }
+      updateQueueProgress(item);
+    }
 
-      xhr.addEventListener('abort', () => {
-        item.xhr = null;
-        reject(new Error('aborted'));
-      });
+    item.verified = true;
+    item.progress = 100;
+    updateQueueProgress(item);
+  }
 
-      xhr.addEventListener('error', () => {
-        item.xhr = null;
-        reject(new Error("Network error"));
-      });
+  function updateQueueProgress(item) {
+    const el = queueList.querySelector('[data-qid="' + item.id + '"]');
+    if (!el) return;
+    const bar = el.querySelector('.queue-progress-bar');
+    if (bar) bar.style.width = item.progress + '%';
+    const statusEl = el.querySelector('.queue-item-status');
+    if (statusEl) statusEl.textContent = item.progress + '%';
+    const speedEl = el.querySelector('.queue-speed');
+    if (speedEl) speedEl.textContent = formatUploadMeta(item);
+  }
 
-      xhr.send(fd);
-    });
+  function uploadIdFor(item) {
+    return simpleHash([item.path || item.file.name, item.file.size, item.file.lastModified].join('|'));
+  }
+
+  function simpleHash(value) {
+    let hash = 2166136261;
+    for (let i = 0; i < value.length; i++) {
+      hash ^= value.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return Math.abs(hash >>> 0).toString(36);
+  }
+
+  function formatUploadMeta(item) {
+    const parts = [formatSize(item.file.size)];
+    if (item.speed) parts.push(formatSize(item.speed) + '/s');
+    if (item.eta) parts.push(t('eta') + item.eta);
+    if (item.verified) parts.push(t('verified'));
+    return parts.join(' · ');
+  }
+
+  function formatDuration(seconds) {
+    const total = Math.max(0, Math.round(seconds));
+    const minutes = Math.floor(total / 60);
+    const secs = total % 60;
+    return minutes > 0 ? minutes + 'm ' + secs + 's' : secs + 's';
   }
 
   const expandedFolders = new Set();
@@ -2413,6 +3364,16 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
 
   function apiPath(path) {
     return String(path || '').split('/').filter(Boolean).map(encodeURIComponent).join('/');
+  }
+
+  function previewUrl(path) {
+    const params = new URLSearchParams({ token, clientId });
+    return '/api/preview/' + apiPath(path) + '?' + params.toString();
+  }
+
+  function downloadUrl(path) {
+    const params = new URLSearchParams({ token, clientId });
+    return '/api/download/' + apiPath(path) + '?' + params.toString();
   }
 
   async function fetchFiles(path) {
@@ -2430,7 +3391,9 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
       const files = await fetchFiles('');
       expandedFolders.clear();
       folderChildren.clear();
+      selectedFilePaths.clear();
       renderFiles(files);
+      loadHistory();
     } catch {
       renderFiles([]);
     } finally {
@@ -2443,10 +3406,12 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
 
   function renderFiles(files) {
     currentFiles = files;
-    filesCount.textContent = files.length;
-    filesDownloadAll.style.display = files.length > 1 ? '' : 'none';
+    const visibleFiles = applyFileView(files);
+    filesCount.textContent = visibleFiles.length;
+    filesDownloadAll.style.display = visibleFiles.length > 0 ? '' : 'none';
+    updateBulkBar();
 
-    if (files.length === 0) {
+    if (visibleFiles.length === 0) {
       filesList.innerHTML = '';
       filesEmpty.style.display = '';
       filesClearAll.style.display = 'none';
@@ -2456,11 +3421,11 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
     filesList.innerHTML = '';
 
     filesClearAll.style.display = files.length > 0 ? '' : 'none';
-    renderFileRows(files, 0);
+    renderFileRows(visibleFiles, 0);
   }
 
   function renderFileRows(files, level) {
-    files.forEach(f => {
+    applyFileView(files).forEach(f => {
       const isDirectory = !!f.isDirectory;
       const itemPath = f.path || f.name;
       const type = isDirectory ? 'folder' : fileType(f.name);
@@ -2470,6 +3435,7 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
       el.className = 'file-item' + (isDirectory ? ' folder-row' : '');
       el.style.paddingLeft = (16 + level * 18) + 'px';
       el.innerHTML =
+        '<input class="file-check" type="checkbox" data-path="' + esc(itemPath) + '"' + (selectedFilePaths.has(itemPath) ? ' checked' : '') + '>' +
         (isDirectory
           ? '<button class="folder-toggle" data-path="' + esc(itemPath) + '" title="' + t('toggleFolder') + '">' +
               '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
@@ -2489,6 +3455,12 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
           '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>' +
         '</button>';
       filesList.appendChild(el);
+      el.querySelector('.file-check').addEventListener('click', e => {
+        e.stopPropagation();
+        if (e.currentTarget.checked) selectedFilePaths.add(itemPath);
+        else selectedFilePaths.delete(itemPath);
+        updateBulkBar();
+      });
 
       const toggle = el.querySelector('.folder-toggle');
       if (toggle) {
@@ -2497,16 +3469,50 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
           toggleFolder(itemPath);
         });
       }
-      el.querySelector('.file-dl').addEventListener('click', () => {
-        window.location.href = '/api/download/' + apiPath(itemPath) + '?token=' + encodeURIComponent(token);
+      if (!isDirectory) {
+        el.addEventListener('click', () => openPreview(f));
+      }
+      el.querySelector('.file-dl').addEventListener('click', e => {
+        e.stopPropagation();
+        window.location.href = downloadUrl(itemPath);
       });
-      el.querySelector('.file-del').addEventListener('click', () => deleteFile(itemPath, f.name));
+      el.querySelector('.file-del').addEventListener('click', e => {
+        e.stopPropagation();
+        deleteFile(itemPath, f.name);
+      });
 
       if (isDirectory && expanded) {
-        const children = folderChildren.get(itemPath) || [];
+        const children = applyFileView(folderChildren.get(itemPath) || []);
         renderFileRows(children, level + 1);
       }
     });
+  }
+
+  function applyFileView(files) {
+    const query = filesSearch.value.trim().toLowerCase();
+    const type = filesTypeFilter.value;
+    const [field, direction] = filesSort.value.split('-');
+    return files
+      .filter(file => {
+        if (query && !file.name.toLowerCase().includes(query) && !(file.path || '').toLowerCase().includes(query)) return false;
+        if (type !== 'all' && !file.isDirectory && fileType(file.name) !== type) return false;
+        return true;
+      })
+      .slice()
+      .sort((a, b) => {
+        if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+        let result = 0;
+        if (field === 'size') result = (a.size || 0) - (b.size || 0);
+        else if (field === 'time') result = (a.modified || 0) - (b.modified || 0);
+        else result = a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+        return direction === 'desc' ? -result : result;
+      });
+  }
+
+  function updateBulkBar() {
+    const count = selectedFilePaths.size;
+    filesBulk.classList.toggle('show', count > 0);
+    filesBulkCount.textContent = t('selectedCount') + count + t('selectedSuffix');
   }
 
   async function toggleFolder(path) {
@@ -2561,22 +3567,192 @@ html[data-theme="light"] .toast.warning{background:#fff7e6;border-color:rgba(154
 
   filesDownloadAll.addEventListener('click', () => {
     if (currentFiles.length === 0) return;
-    let delay = 0;
-    currentFiles.forEach(f => {
-      setTimeout(() => {
-        const a = document.createElement('a');
-        a.href = '/api/download/' + apiPath(f.path || f.name) + '?token=' + encodeURIComponent(token);
-        a.click();
-      }, delay);
-      delay += 300;
-    });
+    downloadPaths(applyFileView(currentFiles).map(f => f.path || f.name));
     showToast('info', t('downloadStart') + currentFiles.length + t('fileCountSuffix'));
   });
 
   filesClearAll.addEventListener('click', clearAllFiles);
   refreshBtn.addEventListener('click', loadFiles);
   filesRefresh.addEventListener('click', loadFiles);
+  historyRefresh.addEventListener('click', loadHistory);
+  filesSearch.addEventListener('input', () => renderFiles(currentFiles));
+  filesTypeFilter.addEventListener('change', () => renderFiles(currentFiles));
+  filesSort.addEventListener('change', () => renderFiles(currentFiles));
+  filesSelectAll.addEventListener('click', () => {
+    collectVisiblePaths(currentFiles).forEach(path => selectedFilePaths.add(path));
+    renderFiles(currentFiles);
+  });
+  filesBulkDownload.addEventListener('click', () => {
+    downloadPaths(Array.from(selectedFilePaths));
+  });
+  filesBulkDelete.addEventListener('click', async () => {
+    const paths = Array.from(selectedFilePaths);
+    let deleted = 0;
+    for (const path of paths) {
+      try {
+        const params = new URLSearchParams({ token, clientId });
+        const r = await fetch('/api/files/' + apiPath(path) + '?' + params.toString(), { method: 'DELETE' });
+        if (r.ok) deleted++;
+      } catch {}
+    }
+    selectedFilePaths.clear();
+    showToast('success', t('deletedCountPrefix') + deleted + t('deletedCountSuffix'));
+    loadFiles();
+  });
 
+  function downloadPaths(paths) {
+    if (paths.length === 0) return;
+    if (paths.length === 1) {
+      window.location.href = downloadUrl(paths[0]);
+      setTimeout(loadHistory, 800);
+      return;
+    }
+    const params = new URLSearchParams({ token, paths: JSON.stringify(paths) });
+    window.location.href = '/api/download-zip?' + params.toString();
+    setTimeout(loadHistory, 800);
+  }
+
+  function collectVisiblePaths(files) {
+    const paths = [];
+    applyFileView(files).forEach(file => {
+      paths.push(file.path || file.name);
+      const children = folderChildren.get(file.path || file.name);
+      if (children) paths.push(...collectVisiblePaths(children));
+    });
+    return paths;
+  }
+
+  previewClose.addEventListener('click', closePreview);
+  previewOverlay.addEventListener('click', e => {
+    if (e.target === previewOverlay) closePreview();
+  });
+  previewDownload.addEventListener('click', () => {
+    if (!currentPreview) return;
+    window.location.href = downloadUrl(currentPreview.path || currentPreview.name);
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && previewOverlay.classList.contains('show')) closePreview();
+  });
+
+  function openPreview(file) {
+    if (!file || file.isDirectory) return;
+    currentPreview = file;
+    previewTitle.textContent = file.name;
+    previewMeta.textContent = formatSize(file.size);
+    previewOverlay.classList.add('show');
+    renderPreview(file);
+  }
+
+  async function renderPreview(file) {
+    const requestId = ++previewRequestId;
+    const kind = previewKind(file.name);
+    const url = previewUrl(file.path || file.name);
+    showPreviewState('info', t('previewLoading'));
+
+    if (kind === 'unsupported') {
+      showPreviewState('info', t('unsupportedPreview'));
+      return;
+    }
+    if (kind === 'text' && file.size > TEXT_PREVIEW_LIMIT) {
+      showPreviewState('warning', t('fileTooLargePreview'));
+      return;
+    }
+
+    try {
+      if (kind === 'image') {
+        previewBody.innerHTML = '<img class="preview-media" alt="">';
+        const img = previewBody.querySelector('img');
+        img.alt = file.name;
+        img.src = url;
+        return;
+      }
+      if (kind === 'video') {
+        previewBody.innerHTML = '<video class="preview-video" controls playsinline></video>';
+        previewBody.querySelector('video').src = url;
+        return;
+      }
+      if (kind === 'audio') {
+        previewBody.innerHTML = '<audio class="preview-audio" controls></audio>';
+        previewBody.querySelector('audio').src = url;
+        return;
+      }
+      if (kind === 'pdf') {
+        previewBody.innerHTML = '<iframe class="preview-frame" title="' + esc(file.name) + '"></iframe>';
+        previewBody.querySelector('iframe').src = url;
+        return;
+      }
+
+      const r = await fetch(url);
+      if (!r.ok) throw new Error('Preview failed');
+      const text = await r.text();
+      if (requestId !== previewRequestId) return;
+      previewBody.innerHTML = '<pre class="preview-text"></pre>';
+      previewBody.querySelector('pre').textContent = text;
+    } catch {
+      if (requestId !== previewRequestId) return;
+      showPreviewState('error', t('previewFailed'));
+    }
+  }
+
+  function closePreview() {
+    previewRequestId++;
+    previewOverlay.classList.remove('show');
+    previewBody.innerHTML = '';
+    previewTitle.textContent = t('preview');
+    previewMeta.textContent = '';
+    currentPreview = null;
+  }
+
+  function showPreviewState(type, message) {
+    const icons = {
+      info: '<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>',
+      warning: '<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>',
+      error: '<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M15 9 9 15"/><path d="m9 9 6 6"/></svg>'
+    };
+    previewBody.innerHTML = '<div class="preview-state">' + (icons[type] || icons.info) + '<div>' + esc(message) + '</div></div>';
+  }
+
+  function previewKind(name) {
+    const ext = (name.split('.').pop() || '').toLowerCase();
+    if (['jpg','jpeg','png','gif','webp','bmp','ico','avif'].includes(ext)) return 'image';
+    if (['mp4','webm','mov','m4v'].includes(ext)) return 'video';
+    if (['mp3','wav','ogg','m4a','flac'].includes(ext)) return 'audio';
+    if (ext === 'pdf') return 'pdf';
+    if (['txt','log','md','csv','json','jsonl','js','ts','jsx','tsx','css','html','htm','xml','svg','yaml','yml','toml','rs','py','go','java','c','cpp','h','hpp','sh','bat','ps1','sql'].includes(ext)) return 'text';
+    return 'unsupported';
+  }
+
+  async function loadHistory() {
+    if (!token) return;
+    try {
+      const r = await fetch('/api/history?token=' + encodeURIComponent(token));
+      if (!r.ok) throw new Error('History failed');
+      renderHistory(await r.json());
+    } catch {
+      renderHistory([]);
+    }
+  }
+
+  function renderHistory(entries) {
+    if (!entries || entries.length === 0) {
+      historyList.innerHTML = '<div class="empty-state"><p>' + t('noFiles') + '</p></div>';
+      return;
+    }
+    historyList.innerHTML = '';
+    entries.slice(0, 30).forEach(entry => {
+      const el = document.createElement('div');
+      el.className = 'history-item';
+      const typeLabel = entry.type === 'upload' ? t('uploading').replace('…','') : t('download');
+      const time = entry.timestamp ? new Date(entry.timestamp).toLocaleString() : '';
+      el.innerHTML =
+        '<span class="history-badge ' + esc(entry.type || '') + '">' + esc(typeLabel) + '</span>' +
+        '<div class="history-info">' +
+          '<div class="history-name">' + esc(entry.name || entry.path || '') + '</div>' +
+          '<div class="history-meta">' + esc(formatSize(entry.size || 0)) + (entry.checksum ? ' · SHA-256 ' + esc(entry.checksum.slice(0, 12)) : '') + (time ? ' · ' + esc(time) : '') + '</div>' +
+        '</div>';
+      historyList.appendChild(el);
+    });
+  }
 
   function fileType(name) {
     const ext = (name.split('.').pop() || '').toLowerCase();
@@ -2659,5 +3835,39 @@ mod tests {
     fn format_access_url_wraps_ipv6_hosts() {
         let ip = "::1".parse().unwrap();
         assert_eq!(format_access_url(ip, 37210), "http://[::1]:37210");
+    }
+
+    #[test]
+    fn guess_content_type_covers_previewable_files() {
+        assert_eq!(guess_content_type("photo.WEBP"), "image/webp");
+        assert_eq!(guess_content_type("clip.webm"), "video/webm");
+        assert_eq!(guess_content_type("sound.flac"), "audio/flac");
+        assert_eq!(guess_content_type("report.pdf"), "application/pdf");
+        assert_eq!(guess_content_type("notes.md"), "text/plain; charset=utf-8");
+        assert_eq!(
+            guess_content_type("bundle.apk"),
+            "application/vnd.android.package-archive"
+        );
+        assert_eq!(guess_content_type("blob.bin"), "application/octet-stream");
+    }
+
+    #[test]
+    fn preview_content_type_keeps_executable_markup_as_text() {
+        assert_eq!(
+            preview_content_type("index.html"),
+            "text/plain; charset=utf-8"
+        );
+        assert_eq!(
+            preview_content_type("vector.svg"),
+            "text/plain; charset=utf-8"
+        );
+    }
+
+    #[test]
+    fn parse_range_header_supports_common_ranges() {
+        assert_eq!(parse_range_header("bytes=0-99", 1000), Some((0, 99)));
+        assert_eq!(parse_range_header("bytes=100-", 1000), Some((100, 999)));
+        assert_eq!(parse_range_header("bytes=-200", 1000), Some((800, 999)));
+        assert_eq!(parse_range_header("bytes=1000-1200", 1000), None);
     }
 }

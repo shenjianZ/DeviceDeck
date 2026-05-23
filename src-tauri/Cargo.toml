@@ -38,3 +38,4 @@ nanoid = "0.4"
 base64 = "0.22"
 tar = "0.4"
 zip = { version = "4.6", default-features = false, features = ["deflate"] }
+sha2 = "0.10"
