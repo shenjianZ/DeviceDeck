@@ -2,6 +2,21 @@
 
 本文件记录 DeviceDeck 的版本更新历史。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [0.1.3] - 2026-05-23
+
+### Added
+
+- WebSocket 实时文件事件通知，连接客户端在文件创建、删除、清空时即时收到推送
+- 文件预览支持，扩展 MIME 类型识别范围
+- 分片上传与断点续传能力，附带 SHA-256 校验验证
+- 传输历史记录追踪
+- 批量下载端点（batch download）
+- 文件筛选/排序下拉框自定义组件，替代原生 `<select>`，统一视觉风格并支持中英文本地化
+
+### Changed
+
+- WiFi 传输模块大幅增强（+1761 行），引入 tokio broadcast channel 驱动事件广播
+
 ## [0.1.2] - 2026-05-22
 
 ### Added
